@@ -124,6 +124,11 @@ pip install pyinstaller pystray pillow
 python build.py
 # Output: dist/RPiConsole.exe
 ```
+### Option C — Use prebuilt .exe
+
+```bash
+use the prebuilt exe file in the pc-app directory. 
+```
 
 To auto-start with Windows: press `Win+R`, type `shell:startup`, drop a shortcut to `RPiConsole.exe` in that folder.
 
