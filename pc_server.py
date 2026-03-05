@@ -32,6 +32,24 @@ except ImportError:
 # ── Windows-only imports ───────────────────────────────────────────────────
 IS_WINDOWS = sys.platform == 'win32'
 
+def _popen_hidden(cmd, **kwargs):
+    """Spawn a shell command with no visible console window on Windows."""
+    if IS_WINDOWS:
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0  # SW_HIDE
+        return subprocess.Popen(
+            cmd, shell=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            startupinfo=si,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            **kwargs
+        )
+    return subprocess.Popen(cmd, shell=True,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            **kwargs)
+
+
 _pycaw_ok = False
 _winsdk_ok = False
 
@@ -61,8 +79,13 @@ LAUNCH_FILE  = os.path.join(CONFIG_DIR, 'launch_config.json')
 POT_FILE     = os.path.join(CONFIG_DIR, 'pot_config.json')
 SETTINGS_FILE= os.path.join(CONFIG_DIR, 'settings.json')
 
-# UI HTML lives next to this script
-UI_HTML = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pc_ui.html')
+# Locate pc_ui.html whether running as a .py script or a PyInstaller .exe
+def _resource_path(filename):
+    """Return the correct path to a bundled resource file."""
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, filename)
+
+UI_HTML = _resource_path('pc_ui.html')
 
 os.makedirs(CONFIG_DIR, exist_ok=True)
 
@@ -71,6 +94,7 @@ state = {
     'rpi_ip':     None,
     'pot_values': [-1] * 8,   # current values pushed by Pi
     'pot_config': {str(i): '' for i in range(8)},
+    '_user_pot_config': {str(i): '' for i in range(8)},  # ground truth, never overwritten by auto-push echo
     'media': {
         'title': '', 'artist': '', 'playing': False,
         'source': '', 'duration': 0, 'position': 0,
@@ -234,7 +258,7 @@ def _set_master_volume(volume_pct):
             ps = f'(New-Object -ComObject WScript.Shell).SendKeys([char]174)' # just a note
             # PowerShell approach
             cmd = f'powershell -Command "(New-Object -ComObject Shell.Application); $vol = [Math]::Round({volume_pct} * 655.35); (New-Object -ComObject WScript.Shell); Add-Type -TypeDefinition \'using System.Runtime.InteropServices; public class Vol {{ [DllImport(\\\"winmm.dll\\\")] public static extern int waveOutSetVolume(IntPtr h, uint v); }}\'; [Vol]::waveOutSetVolume([IntPtr]::Zero, ($vol -bor ($vol -shl 16)))"'
-            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _popen_hidden(cmd)
             print(f'[Volume] Master -> {volume_pct}% (PowerShell fallback)')
             return True
     except Exception as e:
@@ -341,12 +365,11 @@ def _run_command(command):
             if command.strip().lower().startswith('start ') or \
                command.strip().lower().startswith('cmd ') or \
                command.strip().lower().startswith('powershell'):
-                subprocess.Popen(command, shell=True)
+                _popen_hidden(command)
             else:
-                # Try direct launch first, fall back to shell
-                subprocess.Popen(command, shell=True)
+                _popen_hidden(command)
         else:
-            subprocess.Popen(command, shell=True)
+            _popen_hidden(command)
     except Exception as e:
         print(f'[Launch] Error: {e}')
 
@@ -384,11 +407,24 @@ def pot_changed():
             state['pot_values'][channel] = value
 
         if app_id:
-            if app_id.lower() == 'master':
+            if app_id == '__auto__':
+                # Use per-channel resolved app if available, else fall back to primary
+                ch_str = str(channel)
+                per    = _auto_state['per_channel'].get(ch_str)
+                active = per['app'] if per else _auto_state['current_app']
+                if active:
+                    matched = _set_app_volume(active, value)
+                    status  = 'ok' if matched else 'no_match'
+                    print(f'[Pot/Auto] Ch{channel} -> {active}: {value}% [{status}]')
+                else:
+                    status = 'skipped'
+                    print(f'[Pot/Auto] Ch{channel} -> no active app detected')
+            elif app_id.lower() == 'master':
                 matched = _set_master_volume(value)
+                status  = 'ok' if matched else 'no_match'
             else:
                 matched = _set_app_volume(app_id, value)
-            status = 'ok' if matched else 'no_match'
+                status  = 'ok' if matched else 'no_match'
             print(f'[Pot] Ch{channel} -> {app_id}: {value}% [{status}]')
             return jsonify({'status': status, 'channel': channel, 'value': value, 'app': app_id})
 
@@ -398,11 +434,30 @@ def pot_changed():
 
 @app.route('/api/get_volumes', methods=['POST'])
 def get_volumes():
-    """Pi calls this to sync current PC app volumes back to the pot display."""
+    """Pi calls this to sync current PC app volumes back to the pot display.
+    _user_pot_config is the ground truth for __auto__ channels — the Pi echoing
+    back resolved names never overwrites the user's original assignment.
+    """
     try:
         pot_config = request.json.get('pot_config', {})
-        state['pot_config'] = pot_config
-        volumes = _get_all_volumes(pot_config)
+        user_cfg   = state['_user_pot_config']
+        merged = {}
+        for ch_str, app_id in pot_config.items():
+            if user_cfg.get(ch_str) == '__auto__':
+                # Channel is __auto__ in ground truth — never let echo overwrite it
+                merged[ch_str] = '__auto__'
+            elif app_id == '__auto__':
+                # Pi is sending __auto__ (initial load or manual assignment) — record it
+                merged[ch_str] = '__auto__'
+                user_cfg[ch_str] = '__auto__'
+            else:
+                merged[ch_str] = app_id
+                # Only update user_cfg if this isn't one of our own resolved-name pushes.
+                # We detect our own pushes by checking _last_pushed_names.
+                if _last_pushed_names.get(ch_str) != app_id:
+                    user_cfg[ch_str] = app_id
+        state['pot_config'] = merged
+        volumes = _get_all_volumes(merged)
         return jsonify({'status': 'ok', 'volumes': volumes})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -460,6 +515,9 @@ def get_status():
         'media':      media,
         'pycaw':      _pycaw_ok,
         'winsdk':     _winsdk_ok,
+        'auto_app':      _auto_state['current_app'],
+        'auto_display':  _auto_state['display_name'],
+        'auto_channels': _auto_state['per_channel'],
     })
 
 @app.route('/api/set_rpi_ip', methods=['POST'])
@@ -506,22 +564,281 @@ def set_volume_direct():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
+# ── Processes that are never "user apps" — filtered from pot assignment ────
+_SYSTEM_BLOCKLIST = {
+    # Windows system / shell
+    'explorer.exe','svchost.exe','lsass.exe','csrss.exe','winlogon.exe',
+    'dwm.exe','taskmgr.exe','conhost.exe','dllhost.exe','sihost.exe',
+    'runtimebroker.exe','shellexperiencehost.exe','searchindexer.exe',
+    'searchhost.exe','searchapp.exe','startmenuexperiencehost.exe',
+    'textinputhost.exe','applicationframehost.exe','systemsettings.exe',
+    'fontdrvhost.exe','wudfhost.exe','spoolsv.exe','services.exe',
+    'wininit.exe','smss.exe','registry','system','secure system',
+    'memory compression','antimalware service executable',
+    'windows security health service','settingsynchost.exe',
+    'ctfmon.exe','wlanext.exe','audiodg.exe','wmiprvse.exe',
+    # Security / AV
+    'msmpeng.exe','nissrv.exe','mssense.exe','securityhealthservice.exe',
+    'avgui.exe','avguix.exe','mbam.exe','mbamservice.exe',
+    # Runtimes / helpers
+    'python.exe','python3.exe','pythonw.exe','java.exe','javaw.exe',
+    'node.exe','cmd.exe','powershell.exe','pwsh.exe','wscript.exe',
+    'cscript.exe','rundll32.exe','regsvr32.exe','msiexec.exe',
+    'installer','setup','update','updater','helper','agent',
+    # Common background helpers that aren't user-facing audio
+    'nvidia web helper.exe','nvcontainer.exe','nvsphelper64.exe',
+    'amdow.exe','igfxtray.exe','igfxem.exe','igfxhk.exe',
+    'razer synapse','corsair','logitech','ghub',
+    'onedrive.exe','dropbox.exe','googledrivefs.exe','box.exe',
+    'teams.exe',  # Teams has its own audio; include only if user wants it
+}
+
+def _is_user_app(proc_name: str) -> bool:
+    """Return True if this process looks like a real user app worth controlling."""
+    name_lower = proc_name.lower().strip()
+    # Block exact matches and substring matches for system processes
+    for blocked in _SYSTEM_BLOCKLIST:
+        if name_lower == blocked or name_lower.startswith(blocked.rstrip('.exe')):
+            return False
+    # Block generic patterns
+    import re
+    if re.search(r'(service|daemon|agent|helper|updater|installer|runtime|host|broker'
+                 r'|notif|telemetry|crash|report|sentry|update)', name_lower):
+        return False
+    return True
+
 @app.route('/api/running_apps', methods=['GET'])
 def get_running_apps():
-    """Return list of processes that have audio sessions — useful for pot assignment."""
+    """Return audio-session apps filtered to real user apps only."""
     if not _pycaw_ok:
-        # Fallback: return all running process names
-        procs = sorted(set(p.name() for p in psutil.process_iter(['name'])))
-        return jsonify({'apps': procs[:100], 'pycaw': False})
+        # Fallback: all processes, filtered
+        procs = sorted({
+            p.name() for p in psutil.process_iter(['name'])
+            if p.info.get('name') and _is_user_app(p.info['name'])
+        })
+        return jsonify({'apps': [{'name': n} for n in procs[:80]], 'pycaw': False})
     try:
         sessions = AudioUtilities.GetAllSessions()
         apps = []
+        seen = set()
+        # Always include Master
+        apps.append({'name': 'Master', 'display': 'Master Volume', 'pid': None})
+        seen.add('master')
         for s in sessions:
-            if s.Process:
-                apps.append({'name': s.Process.name(), 'pid': s.Process.pid})
+            proc = s.Process
+            if not proc:
+                continue
+            n = proc.name()
+            if n.lower() in seen:
+                continue
+            if not _is_user_app(n):
+                continue
+            seen.add(n.lower())
+            # Clean display name: strip .exe, title-case
+            display = n.replace('.exe','').replace('.EXE','').replace('-',' ').replace('_',' ').title()
+            apps.append({'name': n, 'display': display, 'pid': proc.pid})
         return jsonify({'apps': apps, 'pycaw': True})
     except Exception as e:
         return jsonify({'apps': [], 'error': str(e)})
+
+# ── Auto-detect: find which apps are actually producing audio right now ────
+_auto_state = {
+    'current_app':    '',
+    'display_name':   '',
+    'per_channel':    {},
+}
+_last_pushed_names = {}
+
+def _get_audio_session_apps():
+    """Return ALL apps with an open Windows audio session (playing OR paused).
+    Returns list of (proc_name, display_name, peak) sorted by peak descending."""
+    if not _pycaw_ok:
+        return []
+    try:
+        import comtypes
+        from pycaw.pycaw import AudioUtilities, IAudioMeterInformation
+
+        fg_pid = None
+        if IS_WINDOWS:
+            try:
+                import ctypes
+                hwnd    = ctypes.windll.user32.GetForegroundWindow()
+                pid_buf = ctypes.c_ulong()
+                ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid_buf))
+                fg_pid = pid_buf.value
+            except Exception:
+                pass
+
+        sessions = AudioUtilities.GetAllSessions()
+        found = []
+        seen  = set()
+        for s in sessions:
+            proc = s.Process
+            if not proc or not _is_user_app(proc.name()):
+                continue
+            name_lower = proc.name().lower()
+            if name_lower in seen:
+                continue
+            seen.add(name_lower)
+            try:
+                meter = s._ctl.QueryInterface(IAudioMeterInformation)
+                peak  = meter.GetPeakValue()
+            except Exception:
+                peak = 0.0
+            is_fg = (fg_pid is not None and proc.pid == fg_pid)
+            display = proc.name().replace('.exe','').replace('.EXE',''). \
+                                 replace('-',' ').replace('_',' ').title()
+            found.append((proc.name(), display, peak, is_fg))
+        found.sort(key=lambda x: (x[2], x[3]), reverse=True)
+        return [(name, display, peak) for name, display, peak, _ in found]
+    except Exception as e:
+        print(f'[Auto] Session scan error: {e}')
+        return []
+
+
+# ── Priority tracker: cumulative play-time per app (persisted to disk) ────
+_app_priority: dict = {}
+_PRIORITY_FILE = os.path.join(CONFIG_DIR, 'app_priority.json')
+
+def _load_priority():
+    global _app_priority
+    _app_priority = _load_json(_PRIORITY_FILE, {})
+
+def _save_priority():
+    _save_json(_PRIORITY_FILE, _app_priority)
+
+def _priority_rank(name: str) -> float:
+    return _app_priority.get(name.lower(), 0.0)
+
+def _update_priority(playing_names: list, tick_secs: float):
+    for name in playing_names:
+        key = name.lower()
+        _app_priority[key] = _app_priority.get(key, 0.0) + tick_secs
+    if playing_names:
+        _save_priority()
+
+
+def _bg_auto_detect_loop():
+    """Background thread: every 0.5s assign apps to __auto__ channels.
+
+    Rules:
+    - Any app with an open audio session is eligible (playing OR paused)
+    - Priority score (cumulative play-time, persisted across restarts) determines
+      which app gets the lowest-numbered channel
+    - Each app occupies exactly ONE channel — no duplicates
+    - An assignment is held as long as the app's audio session exists (not just
+      while it's making noise) — pausing Spotify won't move it off its pot
+    - When a session closes, the channel is freed and the next-ranked app claims it
+    """
+    TICK = 0.5
+
+    while True:
+        time.sleep(TICK)
+        try:
+            cfg = state.get('pot_config', {})
+            auto_channels = sorted(
+                [ch for ch, app in cfg.items() if app == '__auto__'],
+                key=lambda x: int(x)
+            )
+            if not auto_channels:
+                _auto_state.update({'current_app': '', 'display_name': '', 'per_channel': {}})
+                continue
+
+            # All apps with open sessions (peak=0 is fine — they're still there)
+            all_apps = _get_audio_session_apps()   # (name, display, peak)
+            session_names = {name.lower() for name, _, _ in all_apps}
+            playing_names = [name for name, _, peak in all_apps if peak > 0.001]
+
+            # Accumulate priority for playing apps
+            _update_priority(playing_names, TICK)
+
+            # Sort available apps: highest priority first
+            # Ties broken by: currently playing > paused
+            def _sort_key(entry):
+                name, display, peak = entry
+                return (_priority_rank(name), peak > 0.001)
+            ranked = sorted(all_apps, key=_sort_key, reverse=True)
+
+            # --- Assignment pass ---
+            existing   = _auto_state.get('per_channel', {})
+            per_ch     = {}
+            assigned   = set()   # lowercase names already given a channel
+
+            # Pass 1: retain existing assignments whose session is still open
+            for ch_str in auto_channels:
+                prev = existing.get(ch_str, {}).get('app', '')
+                if prev and prev.lower() in session_names and prev.lower() not in assigned:
+                    display = next((d for n, d, _ in all_apps if n == prev), prev)
+                    per_ch[ch_str]  = {'app': prev, 'display': display}
+                    assigned.add(prev.lower())
+
+            # Pass 2: fill empty channels with highest-priority unassigned apps
+            for ch_str in auto_channels:
+                if ch_str in per_ch:
+                    continue
+                for name, display, peak in ranked:
+                    if name.lower() not in assigned:
+                        per_ch[ch_str] = {'app': name, 'display': display}
+                        assigned.add(name.lower())
+                        break
+                else:
+                    per_ch[ch_str] = {'app': '', 'display': ''}
+
+            # Apply volumes
+            for ch_str, info in per_ch.items():
+                app_name = info['app']
+                ch  = int(ch_str)
+                pct = state['pot_values'][ch]
+                if app_name and pct >= 0:
+                    _set_app_volume(app_name, pct)
+
+            _auto_state['per_channel'] = per_ch
+            first = auto_channels[0] if auto_channels else None
+            if first and per_ch.get(first, {}).get('app'):
+                _auto_state['current_app']  = per_ch[first]['app']
+                _auto_state['display_name'] = per_ch[first]['display']
+            else:
+                _auto_state['current_app']  = ''
+                _auto_state['display_name'] = ''
+
+            _push_resolved_names_to_pi(cfg, per_ch)
+
+        except Exception as e:
+            print(f'[Auto] Loop error: {e}')
+
+
+# Throttle Pi pushes — only push when resolved names actually change
+_last_pushed_names = {}
+
+def _push_resolved_names_to_pi(cfg, per_ch):
+    """Push resolved display names to Pi's /api/pot_display so the Pi UI
+    can show 'Spotify' / 'Chrome' on auto-assigned knobs."""
+    global _last_pushed_names
+    if not _requests:
+        return
+    rpi_ip = state.get('rpi_ip', '')
+    if not rpi_ip:
+        return
+
+    # Build {ch: raw_app_name} for all __auto__ channels — Pi UI does its own display formatting
+    display = {}
+    for ch_str, app_id in cfg.items():
+        if app_id == '__auto__':
+            info = per_ch.get(ch_str, {})
+            display[ch_str] = info.get('app', '')  # e.g. 'Spotify.exe' — Pi looks this up in APPS table
+
+    if display == _last_pushed_names:
+        return
+    _last_pushed_names = dict(display)
+    print(f'[Auto] Pushing display names to Pi: {display}')
+
+    def _do_push():
+        try:
+            _requests.post(f'http://{rpi_ip}:5000/api/pot_display', json=display, timeout=2)
+        except Exception as e:
+            print(f'[Auto] Pi display push failed: {e}')
+
+    threading.Thread(target=_do_push, daemon=True).start()
 
 @app.route('/api/media/control', methods=['POST'])
 def media_control():
@@ -553,7 +870,8 @@ def serve_ui():
 @app.route('/pi/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def pi_proxy(subpath):
     """Proxy any /pi/<endpoint> call to the Pi on port 5000.
-    This means the browser only ever talks to localhost, never the Pi directly."""
+    Special case: /pi/api/status has __auto__ entries in pot_apps replaced
+    with resolved app names so the Pi UI shows live labels."""
     if not _requests:
         return jsonify({'error': 'requests not installed'}), 500
     rpi_ip = state.get('rpi_ip', '')
@@ -565,24 +883,96 @@ def pi_proxy(subpath):
             r = _requests.get(url, timeout=4)
         else:
             r = _requests.post(url, json=request.get_json(silent=True), timeout=4)
-        return Response(r.content, status=r.status_code, content_type=r.headers.get('Content-Type','application/json'))
+
+        # Intercept Pi's /api/status — inject __auto__:AppName into pot_apps
+        # The Pi UI parses this to keep mode='auto' while showing the resolved app name/colour
+        if subpath == 'api/status' and r.status_code == 200:
+            try:
+                data = r.json()
+                pot_apps = data.get('pot_apps', [])
+                per_ch   = _auto_state.get('per_channel', {})
+                for i, app in enumerate(pot_apps):
+                    if app == '__auto__':
+                        resolved = per_ch.get(str(i), {}).get('app', '')
+                        if resolved:
+                            pot_apps[i] = f'__auto__:{resolved}'
+                        # else leave as '__auto__' — no app resolved yet
+                data['pot_apps'] = pot_apps
+                return jsonify(data)
+            except Exception:
+                pass  # fall through to raw response
+
+        return Response(r.content, status=r.status_code,
+                        content_type=r.headers.get('Content-Type', 'application/json'))
     except Exception as e:
         return jsonify({'error': str(e), 'pi_ip': rpi_ip}), 502
 
 @app.route('/api/sysinfo', methods=['GET'])
-def get_sysinfo_proxy():
-    """Fetch sysinfo from the Pi and return it."""
-    rpi_ip = state.get('rpi_ip', '')
-    if not rpi_ip or not _requests:
-        return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'error': 'not connected'})
+def get_sysinfo():
+    """Return this PC's CPU %, RAM %, and GPU temp (preferred) or CPU temp."""
     try:
-        r = _requests.get(f'http://{rpi_ip}:5000/api/sysinfo', timeout=3)
-        return Response(r.content, content_type='application/json')
+        cpu = psutil.cpu_percent(interval=0.2)
+        ram = psutil.virtual_memory().percent
+        temp = 0
+        temp_label = 'TEMP'
+
+        # 1. Try GPUtil for GPU temp (best option — works on Nvidia/AMD with drivers)
+        try:
+            import GPUtil
+            gpus = GPUtil.getGPUs()
+            if gpus and gpus[0].temperature is not None:
+                temp = round(gpus[0].temperature)
+                temp_label = f'GPU ({gpus[0].name.split()[-1]})'
+        except Exception:
+            pass
+
+        # 2. Windows: try WMI for GPU temp via OpenHardwareMonitor namespace
+        if temp == 0 and IS_WINDOWS:
+            try:
+                import wmi
+                w = wmi.WMI(namespace=r'root\OpenHardwareMonitor')
+                for sensor in w.Sensor():
+                    if 'GPU' in sensor.Name and sensor.SensorType == 'Temperature':
+                        temp = round(float(sensor.Value))
+                        temp_label = 'GPU'
+                        break
+            except Exception:
+                pass
+
+        # 3. Windows WMI ACPI thermal (usually CPU — last resort)
+        if temp == 0 and IS_WINDOWS:
+            try:
+                import wmi
+                w = wmi.WMI(namespace=r'root\wmi')
+                for t in w.MSAcpi_ThermalZoneTemperature():
+                    temp = round(t.CurrentTemperature / 10.0 - 273.15)
+                    temp_label = 'CPU'
+                    break
+            except Exception:
+                pass
+
+        # 4. psutil sensors (Linux/Mac fallback)
+        if temp == 0:
+            try:
+                for name, entries in (psutil.sensors_temperatures() or {}).items():
+                    if entries:
+                        temp = round(entries[0].current)
+                        temp_label = 'CPU'
+                        break
+            except Exception:
+                pass
+
+        return jsonify({
+            'cpu':        round(cpu),
+            'ram':        round(ram),
+            'temp':       temp,
+            'temp_label': temp_label,
+        })
     except Exception as e:
-        return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'error': str(e)})
+        return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'temp_label': 'TEMP', 'error': str(e)})
 
 # ══════════════════════════════════════════════════════════════════════════
-# STARTUP
+# STARTUP & SYSTEM TRAY
 # ══════════════════════════════════════════════════════════════════════════
 
 def load_settings():
@@ -591,22 +981,10 @@ def load_settings():
     if state['rpi_ip']:
         print(f'[Boot] RPi IP loaded: {state["rpi_ip"]}')
 
-def print_banner():
-    print()
-    print('╔══════════════════════════════════════════════╗')
-    print('║     RPi Audio Console — PC Backend           ║')
-    print(f'║     UI:  http://localhost:{PORT}               ║')
-    print(f'║     pycaw  (volume):  {"✓" if _pycaw_ok  else "✗ (pip install pycaw)"}{"             " if _pycaw_ok else ""}   ║')
-    print(f'║     winsdk (media):   {"✓" if _winsdk_ok else "✗ (pip install winsdk)"}{"             " if _winsdk_ok else ""}   ║')
-    print('╠══════════════════════════════════════════════╣')
-    print(f'║  Browser opening: http://localhost:{PORT}      ║')
-    print('╚══════════════════════════════════════════════╝')
-    print()
-
 def _open_browser():
-    """Wait for Flask to start, then open the UI in the default browser."""
+    """Wait for Flask to be ready, then open the UI."""
     import urllib.request as _ur
-    for _ in range(20):
+    for _ in range(40):
         try:
             _ur.urlopen(f'http://localhost:{PORT}/', timeout=1)
             break
@@ -616,14 +994,118 @@ def _open_browser():
     webbrowser.open(f'http://localhost:{PORT}/')
     print(f'[Browser] Opened http://localhost:{PORT}/')
 
-def signal_handler(sig, frame):
-    print('\n[Server] Shutting down...')
-    sys.exit(0)
+def _run_flask():
+    """Run Flask in its own thread — never call app.run() on the main thread
+    when pystray owns it."""
+    import logging
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
+    print(f'[Flask] Starting on port {PORT}')
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False,
+            threaded=True, use_debugger=False)
+
+# ── Tray icon image (drawn with Pillow — no external file needed) ──────────
+def _make_tray_icon():
+    """Draw a simple vinyl-disc icon in the brand cyan colour."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return None
+
+    SIZE = 64
+    img  = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+    d    = ImageDraw.Draw(img)
+
+    C    = SIZE // 2
+    CYAN = (0, 229, 255, 255)
+    DIM  = (0, 100, 130, 200)
+    BG   = (13, 16, 23, 255)
+
+    # Outer disc
+    d.ellipse([2, 2, SIZE-2, SIZE-2], fill=BG, outline=CYAN, width=2)
+    # Grooves
+    for r in [22, 16, 10]:
+        d.ellipse([C-r, C-r, C+r, C+r], outline=DIM, width=1)
+    # Hub
+    d.ellipse([C-5, C-5, C+5, C+5], fill=CYAN)
+
+    return img
+
+def _build_tray():
+    """Build and run the pystray tray icon. Blocks until the icon is stopped."""
+    try:
+        import pystray
+    except ImportError:
+        print('[Tray] pystray not installed — running without tray icon.')
+        print('[Tray] Install with: pip install pystray pillow')
+        # Fall back to blocking forever so the process stays alive
+        import signal as _sig
+        _sig.pause() if hasattr(_sig, 'pause') else time.sleep(1e9)
+        return
+
+    icon_img = _make_tray_icon()
+    if icon_img is None:
+        # Pillow missing — create a tiny blank image as fallback
+        try:
+            from PIL import Image
+            icon_img = Image.new('RGB', (16, 16), (0, 229, 255))
+        except Exception:
+            print('[Tray] Pillow not installed — tray icon will be blank.')
+            print('[Tray] Install with: pip install pillow')
+
+    pi_ip_display = lambda: state.get('rpi_ip') or 'not set'
+
+    def on_open(icon, item):
+        threading.Thread(target=_open_browser, daemon=True).start()
+
+    def on_exit(icon, item):
+        print('[Tray] Exit requested')
+        icon.stop()
+        os._exit(0)
+
+    def get_title():
+        pi = pi_ip_display()
+        return f'RPi Audio Console\nPort {PORT}  ·  Pi: {pi}'
+
+    menu = pystray.Menu(
+        pystray.MenuItem('RPi Audio Console', None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem('Open UI', on_open, default=True),   # double-click action
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem(lambda item: f'Pi: {pi_ip_display()}', None, enabled=False),
+        pystray.MenuItem(f'Port: {PORT}', None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem('Exit', on_exit),
+    )
+
+    icon = pystray.Icon(
+        name  = 'rpi_console',
+        icon  = icon_img,
+        title = get_title(),
+        menu  = menu,
+    )
+
+    print('[Tray] Icon running — right-click the system tray to open UI or exit')
+    icon.run()   # blocks main thread; pystray requires this
 
 if __name__ == '__main__':
-    signal.signal(signal.SIGINT, signal_handler)
     load_settings()
-    threading.Thread(target=_bg_media_loop, daemon=True).start()
-    threading.Thread(target=_open_browser,  daemon=True).start()
-    print_banner()
-    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False, threaded=True)
+    _load_priority()
+
+    # Start background threads
+    threading.Thread(target=_bg_media_loop,        daemon=True).start()
+    threading.Thread(target=_bg_auto_detect_loop,  daemon=True).start()
+    threading.Thread(target=_run_flask,            daemon=True).start()
+    threading.Thread(target=_open_browser,         daemon=True).start()
+
+    print()
+    print('╔══════════════════════════════════════════════╗')
+    print('║     RPi Audio Console — PC Backend           ║')
+    print(f'║     UI:  http://localhost:{PORT}               ║')
+    print(f'║     pycaw  (volume):  {"✓" if _pycaw_ok  else "✗ (pip install pycaw)"}{"             " if _pycaw_ok else ""}   ║')
+    print(f'║     winsdk (media):   {"✓" if _winsdk_ok else "✗ (pip install winsdk)"}{"             " if _winsdk_ok else ""}   ║')
+    print('╚══════════════════════════════════════════════╝')
+    print()
+
+    # _build_tray() owns the main thread — it blocks until "Exit" is clicked.
+    # Closing the browser window just hides the UI; the process keeps running.
+    _build_tray()
