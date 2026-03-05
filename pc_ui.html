@@ -497,7 +497,7 @@ function startPolling() {
   fetchStatus();
   fetchSysInfo();
   loadAllConfigs();
-  pollTimer = setInterval(() => { fetchStatus(); }, 1500);
+  pollTimer = setInterval(() => { fetchStatus(); loadPotConfig(); }, 1500);
   setInterval(fetchSysInfo, 5000);
 }
 
@@ -675,18 +675,29 @@ async function refreshApps() {
     const d = await api('GET', '/api/running_apps');
     runningApps = d.apps || [];
     toast(`${runningApps.length} apps found`, 'ok');
-  } catch(e) { toast('Could not fetch app list', 'err'); }
+  } catch(e) { toast('Refresh failed — backend running? ' + e.message, 'err'); }
 }
 
 async function loadPotConfig() {
   try {
-    const d = await api('GET', '/api/pot_config', null, true); // from Pi
+    // Read from the PC backend's cached state — same source as Overview/Diagnostics.
+    // The Pi pushes its pot_config to the backend every 2s via /api/get_volumes.
+    const d = await api('GET', '/api/status');
     if (!d) return;
+    const cfg  = d.pot_config  || {};
+    const vals = d.pot_values  || [];
     for (let i = 0; i < 8; i++) {
       const inp = el('pa' + i);
-      if (inp) inp.value = d[String(i)] || '';
+      if (inp && inp !== document.activeElement) {
+        // Don't overwrite a field the user is currently typing in
+        inp.value = cfg[String(i)] || '';
+      }
+      const barEl = el('pb' + i);
+      const pctEl = el('pp' + i);
+      if (barEl) barEl.style.width = (vals[i] >= 0 ? vals[i] : 0) + '%';
+      if (pctEl) pctEl.textContent = vals[i] >= 0 ? vals[i] + '%' : '—';
     }
-  } catch(e) {}
+  } catch(e) { console.warn('loadPotConfig:', e); }
 }
 
 async function savePotConfig() {
