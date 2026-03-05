@@ -23,6 +23,8 @@ A physical volume mixer built with a Raspberry Pi, potentiometers, and an MCP300
 - Up to 8x potentiometers (10kΩ recommended)
 - Jumper wires
 
+3D printable project files avalible at [RPI Volume Mixer](https://makerworld.com/en/models/2481269-rpi-volume-mixer#profileId-2725270)
+
 ### MCP3008 Wiring
 
 | MCP3008 Pin | Name     | Pi Pin | Pi Function |
@@ -44,6 +46,7 @@ Connect each potentiometer: outer pins to 3.3V and GND, wiper to CH0–CH7 on th
 
 | File | Where it runs | Purpose |
 |------|--------------|---------|
+| `RPiConsole.exe` | Windows PC | Prebuilt pc_server.py + pc_ui.html|
 | `rpi_controller.py` | Raspberry Pi | Flask server, SPI pot reader, proxies PC data |
 | `rpi_ui.html` | Raspberry Pi | Touchscreen display UI |
 | `pc_server.py` | Windows PC | Flask server, audio control, tray app |
@@ -123,8 +126,15 @@ pip install pyinstaller pystray pillow
 python build.py
 # Output: dist/RPiConsole.exe
 ```
-
 To auto-start with Windows: press `Win+R`, type `shell:startup`, drop a shortcut to `RPiConsole.exe` in that folder.
+
+### Option C — Use prebuilt .exe
+
+```bash
+use the prebuilt exe file in the pc-app directory. 
+```
+To auto-start with Windows: press `Win+R`, type `shell:startup`, drop a shortcut to `RPiConsole.exe` in that folder.
+
 
 ### Connecting Pi to PC
 
