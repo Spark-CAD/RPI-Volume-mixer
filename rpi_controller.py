@@ -42,8 +42,9 @@ PORT                = 5000
 
 # ── Shared state (read by Flask routes, written by background threads) ────────
 state = {
-    'pc_ip':      None,
-    'pot_values': [-1] * 8,   # 0-100 pct, -1 = not yet read
+    'pc_ip':       None,
+    'pot_values':  [-1] * 8,   # 0-100 pct, -1 = not yet read
+    'pot_display': [''] * 8,   # resolved display names pushed by PC for __auto__ channels
     'media': {
         'title': '', 'artist': '', 'playing': False,
         'source': '', 'duration': 0, 'position': 0,
@@ -248,6 +249,10 @@ def _spi_reader_loop():
                     if app_id and app_id != '__auto__':
                         _last_pct[ch] = pct
                         _schedule_send(ch, pct, app_id)
+                    elif app_id == '__auto__':
+                        # Send to PC with app='__auto__' so PC can resolve and apply volume
+                        _last_pct[ch] = pct
+                        _schedule_send(ch, pct, '__auto__')
                     else:
                         print(f'[Pot] Ch{ch} -> {pct}% (not assigned, not sent)')
             except Exception as e:
@@ -274,9 +279,24 @@ def get_status():
         'status':     'online',
         'pot_values': state['pot_values'],
         'pot_apps':   [pot_cfg.get(str(i), '') for i in range(8)],
+        'pot_display': state['pot_display'],
         'pc_ip':      state['pc_ip'],
         'media':      state['media'],
     })
+
+@app.route('/api/pot_display', methods=['POST'])
+def set_pot_display():
+    """PC pushes resolved auto-app display names here.
+    e.g. {'1': 'Spotify', '2': 'Chrome', '3': ''} for channels set to __auto__."""
+    try:
+        data = request.json or {}
+        for ch_str, name in data.items():
+            ch = int(ch_str)
+            if 0 <= ch < 8:
+                state['pot_display'][ch] = name or ''
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.route('/api/set_pc_ip', methods=['POST'])
 def set_pc_ip():
@@ -305,6 +325,13 @@ def set_pot_config():
                 if pct >= 0:
                     threading.Thread(
                         target=_send_to_pc, args=(ch, pct, app_id), daemon=True
+                    ).start()
+            elif app_id == '__auto__':
+                ch  = int(ch_str)
+                pct = state['pot_values'][ch]
+                if pct >= 0:
+                    threading.Thread(
+                        target=_send_to_pc, args=(ch, pct, '__auto__'), daemon=True
                     ).start()
         threading.Thread(target=_notify_pc, args=('/api/pot_config', cfg), daemon=True).start()
         return jsonify({'status': 'success'})
@@ -457,6 +484,18 @@ def get_sysinfo():
         return jsonify({'cpu': cpu_pct, 'ram': ram_pct, 'temp': temp})
     except Exception as e:
         return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'error': str(e)})
+
+@app.route('/api/pc_sysinfo', methods=['GET'])
+def get_pc_sysinfo():
+    """Proxy PC's sysinfo (CPU/RAM/GPU temp) to the Pi UI."""
+    pc_ip = state.get('pc_ip', '')
+    if not pc_ip:
+        return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'temp_label': 'N/A', 'error': 'pc_ip not set'})
+    try:
+        r = requests.get(f'http://{pc_ip}:5001/api/sysinfo', timeout=3)
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'temp_label': 'N/A', 'error': str(e)})
 
 @app.route('/api/config', methods=['GET'])
 def get_config():

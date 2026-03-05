@@ -262,11 +262,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
       </div>
       <!-- Sysinfo -->
       <div class="card">
-        <div class="ch"><div class="ct">Pi System</div><button class="btn sm" onclick="fetchSysInfo()">Refresh</button></div>
+        <div class="ch"><div class="ct">PC System</div><button class="btn sm" onclick="fetchSysInfo()">Refresh</button></div>
         <div class="sysbars">
           <div class="sbar-wrap"><div class="sbar-lbl">CPU<span id="cpuVal">—</span></div><div class="sbar-track"><div class="sbar-fill cpu" id="cpuBar" style="width:0%"></div></div></div>
           <div class="sbar-wrap"><div class="sbar-lbl">RAM<span id="ramVal">—</span></div><div class="sbar-track"><div class="sbar-fill ram" id="ramBar" style="width:0%"></div></div></div>
-          <div class="sbar-wrap" style="margin:0"><div class="sbar-lbl">TEMP<span id="tempVal">—</span></div><div class="sbar-track"><div class="sbar-fill temp" id="tempBar" style="width:0%"></div></div></div>
+          <div class="sbar-wrap" style="margin:0"><div class="sbar-lbl"><span id="tempLbl">TEMP</span><span id="tempVal">—</span></div><div class="sbar-track"><div class="sbar-fill temp" id="tempBar" style="width:0%"></div></div></div>
         </div>
       </div>
     </div>
@@ -528,14 +528,17 @@ async function fetchStatus() {
 
 async function fetchSysInfo() {
   try {
-    const d = await api('GET', '/api/sysinfo', null, true); // Pi sysinfo via pass-through
+    const d = await api('GET', '/api/sysinfo'); // PC local — not Pi
     if (!d) return;
-    document.getElementById('cpuVal').textContent  = d.cpu + '%';
-    document.getElementById('ramVal').textContent  = d.ram + '%';
-    document.getElementById('tempVal').textContent = d.temp + '°C';
-    document.getElementById('cpuBar').style.width  = d.cpu + '%';
-    document.getElementById('ramBar').style.width  = d.ram + '%';
-    document.getElementById('tempBar').style.width = Math.min(100, d.temp / 80 * 100) + '%';
+    el('cpuVal').textContent  = d.cpu + '%';
+    el('ramVal').textContent  = d.ram + '%';
+    el('tempVal').textContent = d.temp ? d.temp + '°C' : 'N/A';
+    el('cpuBar').style.width  = d.cpu + '%';
+    el('ramBar').style.width  = d.ram + '%';
+    el('tempBar').style.width = Math.min(100, (d.temp || 0) / 100 * 100) + '%';
+    // Update the temp row label dynamically (GPU vs CPU)
+    const lbl = el('tempLbl');
+    if (lbl && d.temp_label) lbl.textContent = d.temp_label.toUpperCase();
   } catch(e) {}
 }
 
@@ -567,18 +570,25 @@ function updateOverview(d) {
     el('playPauseBtn').textContent = '⏯';
   }
 
-  const vals = d.pot_values || [];
-  const cfg  = d.pot_config || {};
+  const vals    = d.pot_values    || [];
+  const cfg     = d.pot_config    || {};
+  const autoChs = d.auto_channels || {};
   const op   = el('ovPots');
   op.innerHTML = '';
   for (let i = 0; i < 8; i++) {
-    const pct = vals[i] >= 0 ? vals[i] : null;
-    const app = cfg[String(i)] || '';
+    const pct        = vals[i] >= 0 ? vals[i] : null;
+    const raw        = cfg[String(i)] || '';
+    const autoInfo   = autoChs[String(i)];
+    const isAuto     = raw === '__auto__';
+    const displayApp = isAuto
+      ? (autoInfo && autoInfo.display ? autoInfo.display : (autoInfo && autoInfo.app ? autoInfo.app.replace(/\.exe$/i,'') : 'Auto'))
+      : raw;
+    const labelColor = isAuto ? 'var(--amber)' : 'var(--cyan)';
     const div = document.createElement('div');
     div.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:8px 10px;';
     div.innerHTML = `
       <div style="font-family:var(--mono);font-size:8px;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px;">
-        CH${i} <span style="color:var(--amber)">${app || 'unassigned'}</span>
+        CH${i} <span style="color:${labelColor}">${displayApp || 'unassigned'}${isAuto && displayApp !== 'Auto' ? ' ●' : ''}</span>
       </div>
       <div style="font-family:var(--display);font-size:18px;font-weight:700;color:var(--text)">${pct !== null ? pct + '%' : '—'}</div>
       <div style="background:var(--bg);border-radius:2px;height:3px;margin-top:4px;overflow:hidden;">
@@ -604,12 +614,19 @@ function updateDiag(d) {
   const cfg  = d.pot_config || {};
   const tb   = el('diagPots');
   tb.innerHTML = '<tr><th>CH</th><th>App</th><th>Value</th></tr>';
+  const autoDiag = d.auto_channels || {};
   for (let i = 0; i < 8; i++) {
     const tr  = document.createElement('tr');
     const pct = vals[i] >= 0 ? vals[i] + '%' : '—';
-    const app = cfg[String(i)] || '—';
+    const raw = cfg[String(i)] || '—';
     const vc  = vals[i] >= 0 ? 'var(--green)' : 'var(--text-faint)';
-    tr.innerHTML = `<td style="color:var(--amber)">CH${i}</td><td>${app}</td><td style="color:${vc}">${pct}</td>`;
+    const aInfo = autoDiag[String(i)];
+    const isAuto = raw === '__auto__';
+    const dispApp = isAuto
+      ? (aInfo && aInfo.display ? aInfo.display : (aInfo && aInfo.app ? aInfo.app.replace(/\.exe$/i,'') : 'Auto'))
+      : raw;
+    const autoTag = isAuto ? ' <span style="font-size:8px;color:var(--amber);border:1px solid rgba(255,179,64,0.4);border-radius:2px;padding:1px 4px;">AUTO</span>' : '';
+    tr.innerHTML = `<td style="color:var(--amber)">CH${i}</td><td>${dispApp}${autoTag}</td><td style="color:${vc}">${pct}</td>`;
     tb.appendChild(tr);
   }
 }
@@ -640,13 +657,20 @@ function buildPotsGrid() {
     d.innerHTML = `
       <div class="pch-hdr">CH ${i}<span id="pp${i}">—</span></div>
       <div class="pbar-wrap"><div class="pbar-fill" id="pb${i}" style="width:0%"></div></div>
-      <div class="ppct" id="pv${i}">—</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <div class="ppct" id="pv${i}" style="margin:0">—</div>
+        <div id="pauto${i}" style="display:none;font-family:var(--mono);font-size:8px;letter-spacing:1px;
+          color:var(--amber);background:rgba(255,179,64,0.1);border:1px solid rgba(255,179,64,0.25);
+          border-radius:3px;padding:2px 6px;text-transform:uppercase;">AUTO</div>
+        <div id="pactivename${i}" style="font-family:var(--mono);font-size:9px;color:var(--amber);
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;"></div>
+      </div>
       <div class="app-suggest">
-        <input class="papp-input" id="pa${i}" placeholder="e.g. chrome, spotify, discord" autocomplete="off"
+        <input class="papp-input" id="pa${i}" placeholder="e.g. Spotify.exe, Master, __auto__" autocomplete="off"
           oninput="filterApps(${i},this.value)" onfocus="showSuggest(${i})" onblur="hideSuggest(${i})">
         <div class="app-suggest-list" id="sl${i}"></div>
       </div>
-      <div class="papp-hint">Type app process name</div>
+      <div class="papp-hint" id="phint${i}">Type app name or pick from list · use __auto__ to follow active app</div>
     `;
     g.appendChild(d);
   }
@@ -654,12 +678,19 @@ function buildPotsGrid() {
 
 function filterApps(ch, val) {
   const list = el('sl' + ch);
-  const matches = runningApps.filter(a =>
-    (typeof a === 'string' ? a : a.name).toLowerCase().includes(val.toLowerCase())
-  ).slice(0, 10);
+  const matches = runningApps.filter(a => {
+    const name    = typeof a === 'string' ? a : a.name;
+    const display = a.display || name;
+    return name.toLowerCase().includes(val.toLowerCase()) ||
+           display.toLowerCase().includes(val.toLowerCase());
+  }).slice(0, 10);
   list.innerHTML = matches.map(a => {
-    const name = typeof a === 'string' ? a : a.name;
-    return `<div class="asl-item" onmousedown="pickApp(${ch},'${name}')">${name}</div>`;
+    const name    = typeof a === 'string' ? a : a.name;
+    const display = a.display || name;
+    return `<div class="asl-item" onmousedown="pickApp(${ch},'${name}')">
+      <span style="color:var(--cyan)">${display}</span>
+      <span style="color:var(--text-faint);font-size:9px;margin-left:6px">${name !== display ? name : ''}</span>
+    </div>`;
   }).join('');
   list.classList.toggle('open', matches.length > 0 && val.length > 0);
 }
@@ -673,31 +704,70 @@ function pickApp(ch, name) {
 async function refreshApps() {
   try {
     const d = await api('GET', '/api/running_apps');
-    runningApps = d.apps || [];
-    toast(`${runningApps.length} apps found`, 'ok');
+    // Always keep __auto__ and Master at the top regardless of pycaw
+    const special = [
+      { name: '__auto__', display: 'Auto-detect (follows focused app)' },
+      { name: 'Master',   display: 'Master Volume' },
+    ];
+    const fetched = (d.apps || []).filter(a => {
+      const n = (typeof a === 'string' ? a : a.name).toLowerCase();
+      return n !== 'master'; // already in special
+    });
+    runningApps = [...special, ...fetched];
+    toast(`${fetched.length} audio apps found`, 'ok');
   } catch(e) { toast('Refresh failed — backend running? ' + e.message, 'err'); }
 }
 
 async function loadPotConfig() {
   try {
-    // Read from the PC backend's cached state — same source as Overview/Diagnostics.
-    // The Pi pushes its pot_config to the backend every 2s via /api/get_volumes.
-    const d = await api('GET', '/api/status');
+    const d = await api("GET", "/api/status");
     if (!d) return;
-    const cfg  = d.pot_config  || {};
-    const vals = d.pot_values  || [];
+    const cfg         = d.pot_config   || {};
+    const vals        = d.pot_values   || [];
+    const autoCh      = d.auto_channels || {};
     for (let i = 0; i < 8; i++) {
-      const inp = el('pa' + i);
+      const assigned  = cfg[String(i)] || "";
+      const isAuto    = assigned === "__auto__";
+      const autoInfo  = autoCh[String(i)];
+      const liveApp   = autoInfo ? autoInfo.display : (d.auto_display || "");
+      const inp       = el("pa" + i);
+      const autoTag   = el("pauto" + i);
+      const nameTag   = el("pactivename" + i);
+      const hintEl    = el("phint" + i);
       if (inp && inp !== document.activeElement) {
-        // Don't overwrite a field the user is currently typing in
-        inp.value = cfg[String(i)] || '';
+        inp.value = assigned;  // keep __auto__ as stored value
+        // Show resolved name as placeholder so user sees what's being controlled
+        if (isAuto && liveApp) {
+          inp.placeholder = "Auto → " + liveApp;
+        } else if (isAuto) {
+          inp.placeholder = "Auto → listening…";
+        } else {
+          inp.placeholder = "e.g. Spotify.exe, Master, __auto__";
+        }
       }
-      const barEl = el('pb' + i);
-      const pctEl = el('pp' + i);
-      if (barEl) barEl.style.width = (vals[i] >= 0 ? vals[i] : 0) + '%';
-      if (pctEl) pctEl.textContent = vals[i] >= 0 ? vals[i] + '%' : '—';
+      if (autoTag) autoTag.style.display = isAuto ? "inline-block" : "none";
+      if (nameTag) {
+        if (isAuto && liveApp) {
+          nameTag.textContent = "\u2192 " + liveApp;
+          nameTag.style.display = "block";
+          nameTag.style.color = "var(--amber)";
+        } else if (isAuto) {
+          nameTag.textContent = "\u2192 listening…";
+          nameTag.style.display = "block";
+          nameTag.style.color = "var(--text-faint)";
+        } else {
+          nameTag.textContent = "";
+          nameTag.style.display = "none";
+        }
+      }
+      if (hintEl) hintEl.textContent = isAuto
+        ? (liveApp ? "Controlling: " + liveApp + " (switches with active audio)" : "Waiting for audio activity…")
+        : "Type app name, or pick from list";
+      const barEl = el("pb" + i); const pctEl = el("pp" + i);
+      if (barEl) barEl.style.width = (vals[i] >= 0 ? vals[i] : 0) + "%";
+      if (pctEl) pctEl.textContent = vals[i] >= 0 ? vals[i] + "%" : "—";
     }
-  } catch(e) { console.warn('loadPotConfig:', e); }
+  } catch(e) { console.warn("loadPotConfig:", e); }
 }
 
 async function savePotConfig() {

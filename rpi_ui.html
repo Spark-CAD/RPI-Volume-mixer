@@ -731,24 +731,38 @@ async function pollStatus() {
     data.pot_values.forEach((v, i) => {
       if (v >= 0 && v !== pots[i].value) {
         pots[i].value = v;
-        updateKnob(i, v);
+        // Don't call updateKnob for the channel being dragged — drag handler owns it
+        if (!_drag || _drag.ch !== i) updateKnob(i, v);
         if (pots[i].app === 'Master') updateVUMaster(v);
       }
     });
   }
 
-  // ── Pot app assignments (authoritative from Pi config file) ──────────────
+  // ── Pot app assignments + resolved display names from PC ────────────────
+  const potDisplay = data.pot_display || [];
   if (data.pot_apps) {
     let appsChanged = false;
     data.pot_apps.forEach((app, i) => {
-      const newApp = app || '';
-      if (pots[i].app !== newApp) {
-        pots[i].app  = newApp;
-        pots[i].mode = newApp === '__auto__' ? 'auto' : 'manual';
-        appsChanged  = true;
+      let newApp = app || '';
+      let newMode = 'manual';
+      if (newApp === '__auto__') {
+        newMode = 'auto';
+      } else if (newApp.startsWith('__auto__:')) {
+        newApp = '__auto__';
+        newMode = 'auto';
+      }
+      // Always update resolvedApp every poll so updateKnob has fresh colour data
+      const resolvedDisplay = potDisplay[i] || (app && app.startsWith('__auto__:') ? app.slice(9) : '');
+      if (pots[i].app !== newApp || pots[i].resolvedApp !== resolvedDisplay) {
+        pots[i].app         = newApp;
+        pots[i].mode        = newMode;
+        pots[i].resolvedApp = resolvedDisplay;
+        appsChanged = true;
+      } else if (pots[i].mode === 'auto') {
+        // Even if app/mode unchanged, keep resolvedApp fresh from pot_display
+        pots[i].resolvedApp = resolvedDisplay;
       }
     });
-    // Only re-render if something actually changed — avoids destroying drag state
     if (appsChanged && !_drag) renderPots();
   }
 
@@ -758,7 +772,7 @@ async function pollStatus() {
 
 async function pollSysInfo() {
   if (activeWidget !== 'sysinfo') return;
-  const d = await apiFetch('/api/sysinfo');
+  const d = await apiFetch('/api/pc_sysinfo');
   if (!d) return;
   const set = (id, val, unit='%') => {
     const el = document.getElementById(id);
@@ -771,7 +785,14 @@ async function pollSysInfo() {
   const tmp = document.getElementById('siTmp');
   if (cpu) { cpu.textContent = d.cpu+'%'; cpu.className = cls(d.cpu); }
   if (ram) { ram.textContent = d.ram+'%'; ram.className = cls(d.ram); }
-  if (tmp) { tmp.textContent = d.temp+'°C'; tmp.className = cls(d.temp); }
+  if (tmp) {
+    const label = d.temp_label || 'TEMP';
+    tmp.textContent = d.temp ? d.temp+'°C' : 'N/A';
+    tmp.className = cls(d.temp || 0);
+    // Update the label element if it exists
+    const lblEl = document.getElementById('siTmpLbl');
+    if (lblEl) lblEl.textContent = label;
+  }
   bar('siCpuBar', d.cpu);
   bar('siRamBar', d.ram);
   bar('siTmpBar', Math.min(100, d.temp*100/80));
@@ -944,15 +965,44 @@ function drawKnob(svg, valuePct, active, accentColor) {
 function updateKnob(ch, pct) {
   const svg = document.getElementById(`knob${ch}`);
   const pot = pots[ch];
-  const {accent} = appColor(pot.app);
-  if (svg) drawKnob(svg, pct, pot.mode==='auto'||!!pot.app, accent);
+  const isAuto   = pot.mode === 'auto';
+  const resolved = isAuto ? (pot.resolvedApp || '') : '';
+  const isActive = isAuto ? !!resolved : !!pot.app;
+  // Colour: auto uses resolved app (with cyan fallback for unknown apps), manual uses assigned app
+  let accent, bg;
+  if (isAuto && resolved) {
+    const info = appInfo(resolved);
+    accent = info ? info.accent : '#00e5ff';
+    bg     = info ? info.bg     : '#0d1a20';
+  } else {
+    const c = appColor(pot.app);
+    accent = c.accent; bg = c.bg;
+  }
+  if (svg) drawKnob(svg, pct, isActive, accent);
   const mod = document.querySelector(`.pot-mod[data-ch="${ch}"]`);
   if (mod) {
     const v = mod.querySelector('.pot-val');
     if (v) {
       v.textContent = pct >= 0 ? pct+'%' : '---';
       v.classList.toggle('dim', pct < 0);
-      if (accent && pct >= 0) v.style.color = accent;
+      if (isActive && pct >= 0) v.style.color = accent;
+    }
+    if (isActive) {
+      mod.style.background = bg;
+      mod.classList.add('assigned');
+      const bar = mod.querySelector('.pot-accent-bar');
+      if (bar) bar.style.background = accent;
+      const nameEl = mod.querySelector('.pot-name');
+      if (nameEl) {
+        nameEl.style.color = accent + '99';
+        nameEl.classList.remove('autoname', 'empty');
+        if (isAuto && resolved) {
+          const info = appInfo(resolved);
+          nameEl.textContent = info ? info.name : resolved.replace(/\.exe$/i, '');
+        }
+      }
+    } else {
+      mod.classList.remove('assigned');
     }
   }
 }
@@ -1000,6 +1050,7 @@ function _knobEndDrag(e) {
   document.removeEventListener('touchmove',  _knobDrag);
   document.removeEventListener('mouseup',    _knobEndDrag);
   document.removeEventListener('touchend',   _knobEndDrag);
+  renderPots(); // restore correct colours/labels after drag
 }
 
 // Volume POSTs removed — Python SPI thread handles all volume control
@@ -1061,11 +1112,16 @@ setInterval(async () => {
 // POT STRIP
 // ══════════════════════════════════════════════════
 
-function appInfo(id) { return APPS.find(a=>a.id===id)||null; }
+function appInfo(id) { 
+  if (!id) return null;
+  const low = id.toLowerCase();
+  return APPS.find(a => a.id.toLowerCase() === low) || null;
+}
 
 function appColor(app) {
-  // Returns {bg, accent} for a given app id, or defaults
-  const a = APPS.find(a=>a.id===app);
+  if (!app) return {bg:'var(--panel)', accent:'#2a3a4a'};
+  const low = app.toLowerCase();
+  const a = APPS.find(a => a.id.toLowerCase() === low);
   return a ? {bg:a.bg||'var(--panel)', accent:a.accent||'#00e5ff'}
            : {bg:'var(--panel)', accent:'#2a3a4a'};
 }
@@ -1074,29 +1130,39 @@ function renderPots() {
   const strip = document.getElementById('potStrip');
   strip.innerHTML = '';
   pots.forEach((pot,i)=>{
-    const app    = appInfo(pot.app);
     const isAuto = pot.mode==='auto';
+    const resolvedName = pot.resolvedApp || '';
+    // For auto pots with a resolved app, look up its style; otherwise use auto defaults
+    const resolvedAppInfo = resolvedName ? appInfo(resolvedName) : null;
+    const app    = isAuto ? resolvedAppInfo : appInfo(pot.app);
     const isAssigned = !isAuto && !!app;
+    const isAutoActive = isAuto && !!resolvedName;  // auto + any resolved name = light it up
     const hasVal = pot.value >= 0;
-    const label  = isAuto ? 'AUTO' : app ? app.name : `CH ${i}`;
-    const {bg, accent} = appColor(pot.app);
+    // Label: auto+resolved shows app name, pure auto shows 'AUTO', manual shows app name
+    const label  = isAuto
+      ? (resolvedAppInfo ? resolvedAppInfo.name : (resolvedName ? resolvedName.replace('.exe','').replace('.EXE','') : 'AUTO'))
+      : (app ? app.name : `CH ${i}`);
+    // Colours: auto-active uses resolved app colour; unknown apps get generic cyan
+    const {bg, accent} = isAutoActive
+      ? (resolvedAppInfo ? appColor(resolvedName) : {bg:'#0d1a20', accent:'#00e5ff'})
+      : appColor(pot.app);
 
     const m = document.createElement('div');
-    m.className = ['pot-mod', isAssigned?'assigned':'', isAuto?'is-auto':''].join(' ').trim();
+    m.className = ['pot-mod', (isAssigned||isAutoActive)?'assigned':'', isAuto?'is-auto':''].join(' ').trim();
     m.dataset.ch = i;
 
     // Dynamic background colour based on assigned app
-    if (isAssigned || isAuto) {
+    if (isAssigned || isAutoActive) {
       m.style.background = bg;
     }
 
     m.innerHTML = `
-      <div class="pot-accent-bar" style="background:${isAssigned||isAuto ? accent : 'transparent'}"></div>
+      <div class="pot-accent-bar" style="background:${isAssigned||isAutoActive ? accent : 'transparent'}"></div>
       <span class="pot-ch-badge">${i}</span>
       <span class="pot-mode-pill ${isAuto?'aut':'man'}">${isAuto?'AUTO':'MAN'}</span>
       <svg class="knob-svg" data-ch="${i}" id="knob${i}" viewBox="0 0 40 40"></svg>
-      <div class="pot-val ${hasVal?'':'dim'}" style="${isAssigned||isAuto ? `color:${accent};text-shadow:0 0 10px ${accent}55` : ''}">${hasVal ? pot.value+'%' : '---'}</div>
-      <div class="pot-name ${isAuto?'autoname':!app?'empty':''}" style="${isAssigned ? `color:${accent}99` : ''}">${label}</div>`;
+      <div class="pot-val ${hasVal?'':'dim'}" style="${isAssigned||isAutoActive ? `color:${accent};text-shadow:0 0 10px ${accent}55` : ''}">${hasVal ? pot.value+'%' : '---'}</div>
+      <div class="pot-name ${isAuto&&!isAutoActive?'autoname':!app&&!isAuto?'empty':''}" style="${isAssigned||isAutoActive ? `color:${accent}99` : ''}">${label}</div>`;
 
     // Tap on knob SVG = drag to control; tap elsewhere on cell = open modal
     const knobEl = m.querySelector('.knob-svg');
@@ -1111,7 +1177,7 @@ function renderPots() {
       openModal(i);
     });
     strip.appendChild(m);
-    drawKnob(document.getElementById(`knob${i}`), pot.value, isAssigned||isAuto, accent);
+    drawKnob(document.getElementById(`knob${i}`), pot.value, isAssigned||isAutoActive, accent);
   });
 }
 
