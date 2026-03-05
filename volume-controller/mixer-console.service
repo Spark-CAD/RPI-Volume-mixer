@@ -1,7 +1,7 @@
 
 [Unit]
 Description=Audio Console — Pi Server
-After=network.target graphical-session.target
+After=network.target graphical.target
 
 [Service]
 Type=simple
@@ -17,8 +17,6 @@ RestartSec=5
 # Update YOUR_USERNAME below to match above ───────────────────────────────────
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/YOUR_USERNAME/.Xauthority
-
-# Give the desktop session time to start before we try to open Chromium
 
 [Install]
 WantedBy=graphical.target

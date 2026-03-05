@@ -733,12 +733,37 @@ def load_startup_state():
 
 def launch_chromium():
     import urllib.request as _ur
-    for _ in range(20):
+
+    # Step 1: wait for the X display to be ready (up to 60s)
+    # xdpyinfo exits 0 only when :0 is accepting connections
+    print('[Chromium] Waiting for X display...')
+    for _ in range(120):
+        try:
+            r = subprocess.run(
+                ['xdpyinfo', '-display', ':0'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            if r.returncode == 0:
+                break
+        except FileNotFoundError:
+            # xdpyinfo not installed — fall back to a fixed delay
+            time.sleep(5)
+            break
+        time.sleep(0.5)
+    else:
+        print('[Chromium] X display never became ready — launching anyway')
+
+    # Step 2: wait for Flask to be serving (up to 30s)
+    print('[Chromium] Waiting for Flask...')
+    for _ in range(60):
         try:
             _ur.urlopen('http://localhost:5000/api/status', timeout=1)
             break
         except Exception:
             time.sleep(0.5)
+
+    # Step 3: launch Chromium
+    env = {**os.environ, 'DISPLAY': ':0'}
     for binary in ['chromium-browser', 'chromium']:
         try:
             subprocess.Popen(
@@ -748,12 +773,13 @@ def launch_chromium():
                  '--check-for-update-interval=31536000',
                  '--password-store=basic',
                  '--app=http://localhost:5000/'],
-                env={**os.environ, 'DISPLAY': ':0'}
+                env=env
             )
             print(f'[Chromium] Launched with {binary}')
             return
         except FileNotFoundError:
             continue
+    print('[Chromium] No Chromium binary found (tried chromium-browser, chromium)')
     print('[Chromium] Not found')
 
 def signal_handler(sig, frame):
