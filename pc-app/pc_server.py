@@ -19,7 +19,7 @@ Launch buttons: the 'command' field in launch_config.json runs via subprocess.
 Start this script, then open pc_ui.html in your browser.
 """
 
-import json, os, subprocess, sys, threading, time, signal
+import json, os, queue, subprocess, sys, threading, time, signal
 import psutil
 from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
@@ -182,8 +182,10 @@ def _get_media_windows():
                 'duration': dur, 'position': pos,
             }
 
-        result = loop.run_until_complete(_fetch())
-        loop.close()
+        try:
+            result = loop.run_until_complete(_fetch())
+        finally:
+            loop.close()
         return result
     except Exception as e:
         print(f'[Media] winsdk error: {e}')
@@ -773,8 +775,15 @@ def _load_priority():
     global _app_priority
     _app_priority = _load_json(_PRIORITY_FILE, {})
 
+_priority_last_saved = 0.0
+
 def _save_priority():
+    global _priority_last_saved
+    now = time.monotonic()
+    if now - _priority_last_saved < 30.0:   # save at most every 30s to avoid constant disk I/O
+        return
     _save_json(_PRIORITY_FILE, _app_priority)
+    _priority_last_saved = now
 
 def _priority_rank(name: str) -> float:
     return _app_priority.get(name.lower(), 0.0)
@@ -887,9 +896,32 @@ def _bg_auto_detect_loop():
 # Throttle Pi pushes — only push when resolved names actually change
 _last_pushed_names = {}
 
+# Single persistent worker thread for Pi display-name pushes — prevents thread pile-up
+# when the Pi is slow or temporarily unreachable.
+_push_queue: queue.Queue = queue.Queue(maxsize=1)
+
+def _push_worker():
+    while True:
+        try:
+            payload = _push_queue.get()
+            if payload is None:
+                break
+            rpi_ip, display = payload
+            try:
+                _requests.post(f'http://{rpi_ip}:5000/api/pot_display', json=display, timeout=2)
+            except Exception as e:
+                print(f'[Auto] Pi display push failed: {e}')
+        except Exception:
+            pass
+
+_push_worker_thread = threading.Thread(target=_push_worker, daemon=True)
+_push_worker_thread.start()
+
 def _push_resolved_names_to_pi(cfg, per_ch):
     """Push resolved display names to Pi's /api/pot_display so the Pi UI
-    can show 'Spotify' / 'Chrome' on auto-assigned knobs."""
+    can show 'Spotify' / 'Chrome' on auto-assigned knobs.
+    Uses a capped queue (maxsize=1) so only the latest payload is sent —
+    no thread pile-up if the Pi is slow."""
     global _last_pushed_names
     if not _requests:
         return
@@ -909,13 +941,15 @@ def _push_resolved_names_to_pi(cfg, per_ch):
     _last_pushed_names = dict(display)
     print(f'[Auto] Display names changed: {display}')
 
-    def _do_push():
-        try:
-            _requests.post(f'http://{rpi_ip}:5000/api/pot_display', json=display, timeout=2)
-        except Exception as e:
-            print(f'[Auto] Pi display push failed: {e}')
-
-    threading.Thread(target=_do_push, daemon=True).start()
+    # Drain any stale pending push before enqueuing the fresh one
+    try:
+        _push_queue.get_nowait()
+    except queue.Empty:
+        pass
+    try:
+        _push_queue.put_nowait((rpi_ip, display))
+    except queue.Full:
+        pass  # worker is busy with the item we just re-queued — it will pick up next cycle
 
 @app.route('/api/media/control', methods=['POST'])
 def media_control():

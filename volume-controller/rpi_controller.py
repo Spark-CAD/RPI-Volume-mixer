@@ -485,17 +485,25 @@ def get_sysinfo():
     except Exception as e:
         return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'error': str(e)})
 
+_pc_peaks_cache = {'data': {'l': 0, 'r': 0, 'master': 0, 'sessions': {}}, 'ts': 0.0}
+
 @app.route('/api/pc_peaks', methods=['GET'])
 def get_pc_peaks():
-    """Proxy PC real-time audio peaks to the Pi UI."""
+    """Proxy PC real-time audio peaks to the Pi UI.
+    Cached for 150ms so the browser's 60ms poll doesn't flood the PC with requests."""
+    now = time.monotonic()
+    if now - _pc_peaks_cache['ts'] < 0.15:
+        return jsonify(_pc_peaks_cache['data'])
     pc_ip = state.get('pc_ip', '')
     if not pc_ip:
-        return jsonify({'l': 0, 'r': 0, 'master': 0, 'sessions': {}})
+        return jsonify(_pc_peaks_cache['data'])
     try:
         r = requests.get(f'http://{pc_ip}:5001/api/peaks', timeout=1)
-        return jsonify(r.json())
+        _pc_peaks_cache['data'] = r.json()
+        _pc_peaks_cache['ts']   = now
     except Exception:
-        return jsonify({'l': 0, 'r': 0, 'master': 0, 'sessions': {}})
+        _pc_peaks_cache['ts'] = now   # back off even on failure to avoid hammering
+    return jsonify(_pc_peaks_cache['data'])
 
 @app.route('/api/pc_sysinfo', methods=['GET'])
 def get_pc_sysinfo():

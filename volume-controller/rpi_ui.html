@@ -875,12 +875,15 @@ const WIDGETS = {
 };
 
 function setWidget(name) {
+  // Stop any running vu tick before switching
+  if (_vuTickTimer) { clearTimeout(_vuTickTimer); _vuTickTimer = null; }
   activeWidget = name;
   clearInterval(clockTimer);
   const col = document.getElementById('widgetCol');
   col.innerHTML = WIDGETS[name] ? WIDGETS[name]() : '';
-  if (name === 'clock') startClock();
+  if (name === 'clock')  startClock();
   if (name === 'sysinfo') pollSysInfo();
+  if (name === 'vu')     startVuTick();
   // Re-sync master pct if vu
   const master = pots.find(p => p.app === 'Master');
   if (master && master.value >= 0) updateVUMaster(master.value);
@@ -922,6 +925,8 @@ function updateVUMaster(pct) {
   if (el) el.textContent = pct;
 }
 
+let _vuTickTimer = null;
+
 function vuTick() {
   const vuL = document.getElementById('vuL');
   const vuR = document.getElementById('vuR');
@@ -933,8 +938,16 @@ function vuTick() {
       vuL.style.height = '1%';
       vuR.style.height = '1%';
     }
+    _vuTickTimer = setTimeout(vuTick, 60);
+  } else {
+    // Widget switched away or elements gone — stop the chain
+    _vuTickTimer = null;
   }
-  setTimeout(vuTick, 60);
+}
+
+function startVuTick() {
+  if (_vuTickTimer) clearTimeout(_vuTickTimer);
+  _vuTickTimer = setTimeout(vuTick, 60);
 }
 
 // ══════════════════════════════════════════════════
@@ -1840,7 +1853,6 @@ document.getElementById('btnNext').onclick = () => apiPost('/api/button_pressed'
 
 setWidget('vu');
 setLeftWidget('disc');
-vuTick();
 loadAllConfig();
 </script>
 </body>
