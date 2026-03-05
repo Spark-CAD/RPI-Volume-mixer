@@ -1,0 +1,22 @@
+
+[Unit]
+Description=Audio Console — Pi Server
+After=network.target graphical.target
+
+[Service]
+Type=simple
+# ── Change YOUR_USERNAME to your Pi username (run: whoami) ───────────────────
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/volume-controller
+ExecStart=/usr/bin/python3 /home/YOUR_USERNAME/volume-controller/rpi_controller.py
+# ─────────────────────────────────────────────────────────────────────────────
+Restart=on-failure
+RestartSec=5
+
+# X display — needed for Chromium launch and xset DPMS commands
+# Update YOUR_USERNAME below to match above ───────────────────────────────────
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/YOUR_USERNAME/.Xauthority
+
+[Install]
+WantedBy=graphical.target
