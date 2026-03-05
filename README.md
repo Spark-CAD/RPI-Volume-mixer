@@ -44,6 +44,7 @@ Connect each potentiometer: outer pins to 3.3V and GND, wiper to CH0–CH7 on th
 
 | File | Where it runs | Purpose |
 |------|--------------|---------|
+| `RPiConsole.exe` | Windows PC | Prebuilt pc_server.py + pc_ui.html|
 | `rpi_controller.py` | Raspberry Pi | Flask server, SPI pot reader, proxies PC data |
 | `rpi_ui.html` | Raspberry Pi | Touchscreen display UI |
 | `pc_server.py` | Windows PC | Flask server, audio control, tray app |
