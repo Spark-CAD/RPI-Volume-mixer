@@ -23,6 +23,8 @@ A physical volume mixer built with a Raspberry Pi, potentiometers, and an MCP300
 - Up to 8x potentiometers (10kΩ recommended)
 - Jumper wires
 
+3D printable project files avalible at [RPI Volume Mixer](https://makerworld.com/en/models/2481269-rpi-volume-mixer#profileId-2725270)
+
 ### MCP3008 Wiring
 
 | MCP3008 Pin | Name     | Pi Pin | Pi Function |
