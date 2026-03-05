@@ -212,6 +212,52 @@ def _bg_media_loop():
 # VOLUME CONTROL — pycaw
 # ══════════════════════════════════════════════════════════════════════════
 
+def _set_master_volume(volume_pct):
+    """Set Windows master output volume (0-100)."""
+    if not IS_WINDOWS:
+        print(f'[Volume] Master -> {volume_pct}% (non-Windows, skipped)')
+        return False
+    try:
+        volume_pct = max(0, min(100, volume_pct))
+        if _pycaw_ok:
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            from comtypes import CLSCTX_ALL
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = interface.QueryInterface(IAudioEndpointVolume)
+            volume.SetMasterVolumeLevelScalar(volume_pct / 100.0, None)
+            print(f'[Volume] Master -> {volume_pct}% (pycaw)')
+            return True
+        else:
+            # Fallback: use nircmd if available, else PowerShell
+            import subprocess
+            ps = f'(New-Object -ComObject WScript.Shell).SendKeys([char]174)' # just a note
+            # PowerShell approach
+            cmd = f'powershell -Command "(New-Object -ComObject Shell.Application); $vol = [Math]::Round({volume_pct} * 655.35); (New-Object -ComObject WScript.Shell); Add-Type -TypeDefinition \'using System.Runtime.InteropServices; public class Vol {{ [DllImport(\\\"winmm.dll\\\")] public static extern int waveOutSetVolume(IntPtr h, uint v); }}\'; [Vol]::waveOutSetVolume([IntPtr]::Zero, ($vol -bor ($vol -shl 16)))"'
+            subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f'[Volume] Master -> {volume_pct}% (PowerShell fallback)')
+            return True
+    except Exception as e:
+        print(f'[Volume] Master error: {e}')
+        return False
+
+def _send_media_key(action):
+    """Send a Windows media key. Works with Spotify, browsers, VLC, etc."""
+    if not IS_WINDOWS:
+        print(f'[Media] Key {action} (non-Windows, skipped)')
+        return
+    try:
+        import ctypes
+        VK_MAP = {'play_pause': 0xB3, 'next': 0xB0, 'prev': 0xB1, 'stop': 0xB2}
+        vk = VK_MAP.get(action)
+        if vk:
+            KEYEVENTF_KEYUP = 0x0002
+            ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+            print(f'[Media] Key sent: {action}')
+    except Exception as e:
+        print(f'[Media] Key error: {e}')
+
 def _set_app_volume(app_name, volume_pct):
     """Set volume (0-100) for a named Windows application via pycaw."""
     if not _pycaw_ok or not app_name:
@@ -233,32 +279,50 @@ def _set_app_volume(app_name, volume_pct):
         print(f'[Volume] Error setting {app_name}: {e}')
         return False
 
+def _get_master_volume():
+    """Get current Windows master volume as 0-100."""
+    if not IS_WINDOWS or not _pycaw_ok:
+        return None
+    try:
+        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        from comtypes import CLSCTX_ALL
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        volume = interface.QueryInterface(IAudioEndpointVolume)
+        return round(volume.GetMasterVolumeLevelScalar() * 100)
+    except Exception as e:
+        print(f'[Volume] GetMaster error: {e}')
+        return None
+
 def _get_all_volumes(pot_config):
     """Return current volumes for all apps mapped in pot_config."""
-    if not _pycaw_ok:
-        # Return stored pot values as fallback
-        return {str(ch): state['pot_values'][ch] for ch in range(8) if state['pot_values'][ch] >= 0}
-    try:
-        sessions = AudioUtilities.GetAllSessions()
-        proc_vols = {}
-        for session in sessions:
-            proc = session.Process
-            if proc:
-                vol = session._ctl.QueryInterface(ISimpleAudioVolume)
-                proc_vols[proc.name().lower()] = round(vol.GetMasterVolume() * 100)
-
-        result = {}
-        for ch_str, app_id in pot_config.items():
-            if not app_id or app_id == '__auto__':
-                continue
-            for proc_name, vol in proc_vols.items():
-                if app_id.lower() in proc_name:
-                    result[ch_str] = vol
+    result = {}
+    for ch_str, app_id in pot_config.items():
+        if not app_id or app_id == '__auto__':
+            continue
+        if app_id.lower() == 'master':
+            v = _get_master_volume()
+            if v is not None:
+                result[ch_str] = v
+            continue
+        if not _pycaw_ok:
+            # Return stored pot value as fallback
+            ch = int(ch_str)
+            if state['pot_values'][ch] >= 0:
+                result[ch_str] = state['pot_values'][ch]
+            continue
+        try:
+            from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+            sessions = AudioUtilities.GetAllSessions()
+            for session in sessions:
+                proc = session.Process
+                if proc and app_id.lower() in proc.name().lower():
+                    vol = session._ctl.QueryInterface(ISimpleAudioVolume)
+                    result[ch_str] = round(vol.GetMasterVolume() * 100)
                     break
-        return result
-    except Exception as e:
-        print(f'[Volume] GetAllVolumes error: {e}')
-        return {}
+        except Exception as e:
+            print(f'[Volume] GetVolumes ch{ch_str} error: {e}')
+    return result
 
 # ══════════════════════════════════════════════════════════════════════════
 # LAUNCH COMMANDS
@@ -320,8 +384,11 @@ def pot_changed():
             state['pot_values'][channel] = value
 
         if app_id:
-            matched = _set_app_volume(app_id, value)
-            status  = 'ok' if matched else 'no_match'
+            if app_id.lower() == 'master':
+                matched = _set_master_volume(value)
+            else:
+                matched = _set_app_volume(app_id, value)
+            status = 'ok' if matched else 'no_match'
             print(f'[Pot] Ch{channel} -> {app_id}: {value}% [{status}]')
             return jsonify({'status': status, 'channel': channel, 'value': value, 'app': app_id})
 
@@ -342,10 +409,22 @@ def get_volumes():
 
 @app.route('/api/button_pressed', methods=['POST'])
 def button_pressed():
-    """Pi sends button grid presses here."""
+    """Pi sends button grid presses here — includes media control buttons."""
     try:
         idx = request.json.get('button_index')
-        print(f'[Button] Grid button {idx} pressed')
+        print(f'[Button] {idx}')
+
+        # Media control buttons sent from the Pi UI
+        MEDIA_MAP = {
+            'media_play':  'play_pause',
+            'media_prev':  'prev',
+            'media_next':  'next',
+            'media_stop':  'stop',
+        }
+        if idx in MEDIA_MAP:
+            _send_media_key(MEDIA_MAP[idx])
+            return jsonify({'status': 'ok', 'action': MEDIA_MAP[idx]})
+
         return jsonify({'status': 'ok', 'button_index': idx})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
@@ -446,20 +525,13 @@ def get_running_apps():
 
 @app.route('/api/media/control', methods=['POST'])
 def media_control():
-    """Send media key commands (play/pause/next/prev) via Windows key simulation."""
+    """UI sends media key commands (play/pause/next/prev)."""
     if not IS_WINDOWS:
         return jsonify({'status': 'unsupported'})
     try:
         action = request.json.get('action', '')
-        import ctypes
-        # Virtual key codes
-        VK_MEDIA = {'play_pause': 0xB3, 'next': 0xB0, 'prev': 0xB1, 'stop': 0xB2}
-        vk = VK_MEDIA.get(action)
-        if vk:
-            KEYEVENTF_KEYUP = 0x0002
-            ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
-            ctypes.windll.user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
-            print(f'[Media] {action} key sent')
+        if action in ('play_pause', 'next', 'prev', 'stop'):
+            _send_media_key(action)
             return jsonify({'status': 'ok', 'action': action})
         return jsonify({'status': 'error', 'reason': 'unknown action'})
     except Exception as e:
