@@ -485,24 +485,43 @@ def get_sysinfo():
     except Exception as e:
         return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'error': str(e)})
 
+@app.route('/api/uptime', methods=['GET'])
+def get_uptime():
+    try:
+        with open('/proc/uptime') as f:
+            seconds = float(f.read().split()[0])
+        return jsonify({'seconds': seconds})
+    except Exception as e:
+        return jsonify({'seconds': 0, 'error': str(e)})
+
 _pc_peaks_cache = {'data': {'l': 0, 'r': 0, 'master': 0, 'sessions': {}}, 'ts': 0.0}
+_pc_peaks_fetching = False
+
+def _fetch_peaks_bg():
+    """Background fetch of PC peaks — called in a daemon thread so the
+    Flask route always returns instantly from cache."""
+    global _pc_peaks_fetching
+    pc_ip = state.get('pc_ip', '')
+    if not pc_ip or not requests:
+        _pc_peaks_fetching = False
+        return
+    try:
+        r = requests.get(f'http://{pc_ip}:5001/api/peaks', timeout=2)
+        _pc_peaks_cache['data'] = r.json()
+    except Exception:
+        pass
+    _pc_peaks_cache['ts'] = time.monotonic()
+    _pc_peaks_fetching = False
 
 @app.route('/api/pc_peaks', methods=['GET'])
 def get_pc_peaks():
     """Proxy PC real-time audio peaks to the Pi UI.
-    Cached for 150ms so the browser's 60ms poll doesn't flood the PC with requests."""
+    Always returns immediately from cache; background thread refreshes every 100ms."""
+    global _pc_peaks_fetching
     now = time.monotonic()
-    if now - _pc_peaks_cache['ts'] < 0.15:
-        return jsonify(_pc_peaks_cache['data'])
-    pc_ip = state.get('pc_ip', '')
-    if not pc_ip:
-        return jsonify(_pc_peaks_cache['data'])
-    try:
-        r = requests.get(f'http://{pc_ip}:5001/api/peaks', timeout=1)
-        _pc_peaks_cache['data'] = r.json()
-        _pc_peaks_cache['ts']   = now
-    except Exception:
-        _pc_peaks_cache['ts'] = now   # back off even on failure to avoid hammering
+    if not _pc_peaks_fetching and now - _pc_peaks_cache['ts'] >= 0.1:
+        _pc_peaks_fetching = True
+        threading.Thread(target=_fetch_peaks_bg, daemon=True).start()
     return jsonify(_pc_peaks_cache['data'])
 
 @app.route('/api/pc_sysinfo', methods=['GET'])
@@ -516,6 +535,20 @@ def get_pc_sysinfo():
         return jsonify(r.json())
     except Exception as e:
         return jsonify({'cpu': 0, 'ram': 0, 'temp': 0, 'temp_label': 'N/A', 'error': str(e)})
+
+@app.route('/api/pc_pot_display', methods=['GET'])
+def get_pc_pot_display():
+    """Proxy PC's current resolved auto-app display names to the Pi UI.
+    Called once on startup so the Pi shows correct app names without waiting
+    for the PC to push them."""
+    pc_ip = state.get('pc_ip', '')
+    if not pc_ip:
+        return jsonify({})
+    try:
+        r = requests.get(f'http://{pc_ip}:5001/api/pot_display', timeout=3)
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
@@ -614,12 +647,14 @@ def _fmt_time(s):
     return f'{s // 60}:{s % 60:02d}'
 
 def _bg_media_poll():
-    """Polls PC every 1s. Tracks position locally between polls so the
+    """Polls PC every 0.5s. Tracks position locally between polls so the
     UI always has a smooth, current value. Pre-computes display strings
-    so the HTML does zero math."""
+    so the HTML does zero math. Every 30 polls sends without a fingerprint
+    to force a full response and recover from any stale winsdk session handle."""
     local_pos  = 0.0
     last_tick  = time.monotonic()
     last_title = ''
+    _poll_count = 0
 
     while True:
         now     = time.monotonic()
@@ -637,16 +672,20 @@ def _bg_media_poll():
         state['media']['elapsed_str']  = _fmt_time(local_pos)
         state['media']['duration_str'] = _fmt_time(dur)
 
-        # Poll PC for ground truth every 1s
+        # Poll PC for ground truth every 0.5s
         time.sleep(0.5)
+        _poll_count += 1
         pc_ip = state.get('pc_ip')
         if not pc_ip or not requests:
             continue
         try:
-            # Send current title as a cheap fingerprint — PC returns 204 if unchanged
+            # Every 30 polls (~15s) skip the fingerprint to force a full response —
+            # this recovers from stale winsdk session handles that return old titles
+            force_full = (_poll_count % 30 == 0)
+            headers = {} if force_full else {'X-Media-Title': state['media'].get('title', '')}
             r = requests.get(
                 f'http://{pc_ip}:5001/api/media',
-                headers={'X-Media-Title': state['media'].get('title', '')},
+                headers=headers,
                 timeout=2
             )
             if r.status_code == 204:

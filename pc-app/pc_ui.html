@@ -163,6 +163,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 .dtable td{padding:10px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--text);}
 .dtable tr:last-child td{border-bottom:none;}
 
+/* ── STATUS ROWS ── */
+.status-row{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);transition:background .2s;}
+.status-row:hover{background:rgba(255,255,255,.015);}
+.status-row-left{display:flex;align-items:center;gap:12px;}
+.status-row-icon{font-size:16px;width:24px;text-align:center;transition:all .3s;filter:grayscale(1);opacity:.3;}
+.status-row-icon.ok{filter:none;opacity:1;color:var(--green);text-shadow:0 0 8px var(--green);}
+.status-row-icon.err{filter:none;opacity:.7;color:var(--red);}
+.status-row-icon.warn{filter:none;opacity:.8;color:var(--amber);}
+.status-row-name{font-family:var(--display);font-size:12px;font-weight:600;color:var(--text);letter-spacing:.5px;}
+.status-row-sub{font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:2px;letter-spacing:.5px;}
+
 /* ── PILLS / TAGS ── */
 .pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:10px;font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;}
 .pill.ok{color:var(--green);background:var(--green-dim);border:1px solid rgba(0,230,118,.2);}
@@ -273,29 +284,62 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     </div>
     <div>
       <!-- Backend status -->
-      <div class="card">
-        <div class="ch"><div class="ct">Backend Status</div></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px;">
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">PC BACKEND</div>
-            <span class="pill" id="backendPill" style="color:var(--red);background:var(--red-dim);border:1px solid rgba(255,23,68,.2);">Offline</span>
-          </div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px;">
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">PI CONNECTION</div>
-            <span class="pill" id="piPill" style="color:var(--red);background:var(--red-dim);border:1px solid rgba(255,23,68,.2);">Unknown</span>
-          </div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px;">
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">PYCAW (VOLUME)</div>
-            <span class="pill" id="pycawPill">—</span>
-          </div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px;">
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">WINSDK (MEDIA)</div>
-            <span class="pill" id="winsdkPill">—</span>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <!-- Header bar -->
+        <div style="padding:14px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <div class="ct">System Status</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div id="statusDotBig" style="width:8px;height:8px;border-radius:50%;background:var(--red);transition:all .4s;flex-shrink:0;"></div>
+            <span id="statusSummary" style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim);">INITIALISING</span>
           </div>
         </div>
-        <div style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--text-dim);line-height:1.7;">
-          Pi IP: <span id="ovPiIp" style="color:var(--cyan)">—</span><br>
-          Last ping: <span id="ovLastPing" style="color:var(--text)">—</span>
+        <!-- Status rows -->
+        <div style="display:flex;flex-direction:column;gap:0;">
+          <div class="status-row" id="srow-backend">
+            <div class="status-row-left">
+              <div class="status-row-icon" id="sicon-backend">⬡</div>
+              <div>
+                <div class="status-row-name">PC Backend</div>
+                <div class="status-row-sub">localhost:5001</div>
+              </div>
+            </div>
+            <span class="pill" id="backendPill" style="color:var(--red);background:var(--red-dim);border:1px solid rgba(255,23,68,.2);">Offline</span>
+          </div>
+          <div class="status-row" id="srow-pi">
+            <div class="status-row-left">
+              <div class="status-row-icon" id="sicon-pi">⬡</div>
+              <div>
+                <div class="status-row-name">Raspberry Pi</div>
+                <div class="status-row-sub" id="ovPiIp">—</div>
+              </div>
+            </div>
+            <span class="pill" id="piPill" style="color:var(--red);background:var(--red-dim);border:1px solid rgba(255,23,68,.2);">Unknown</span>
+          </div>
+          <div class="status-row" id="srow-pycaw">
+            <div class="status-row-left">
+              <div class="status-row-icon" id="sicon-pycaw">⬡</div>
+              <div>
+                <div class="status-row-name">pycaw</div>
+                <div class="status-row-sub">Per-app volume control</div>
+              </div>
+            </div>
+            <span class="pill" id="pycawPill" style="color:var(--text-dim);background:var(--surface);border:1px solid var(--border);">—</span>
+          </div>
+          <div class="status-row" style="border-bottom:none;" id="srow-winsdk">
+            <div class="status-row-left">
+              <div class="status-row-icon" id="sicon-winsdk">⬡</div>
+              <div>
+                <div class="status-row-name">winsdk</div>
+                <div class="status-row-sub">Media info &amp; controls</div>
+              </div>
+            </div>
+            <span class="pill" id="winsdkPill" style="color:var(--text-dim);background:var(--surface);border:1px solid var(--border);">—</span>
+          </div>
+        </div>
+        <!-- Footer -->
+        <div style="padding:10px 18px;background:var(--surface);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1px;">LAST PING</span>
+          <span id="ovLastPing" style="font-family:var(--mono);font-size:9px;color:var(--text-dim);">—</span>
         </div>
       </div>
       <!-- Pot overview -->
@@ -940,6 +984,9 @@ async function pollPiStatus() {
     if (d.reachable) {
       setPill('piPill', 'ok', d.rpi_ip || 'Connected');
       setHeaderStatus('online', 'PI ONLINE');
+      // Update Pi IP sub-row
+      const piIpEl = el('ovPiIp');
+      if (piIpEl) piIpEl.textContent = d.rpi_ip || 'connected';
     } else if (d.reason === 'no_ip') {
       setPill('piPill', 'warn', 'Not set');
       setHeaderStatus('offline', 'PI IP NOT SET');
@@ -947,6 +994,16 @@ async function pollPiStatus() {
       setPill('piPill', 'err', 'Unreachable');
       setHeaderStatus('offline', 'PI OFFLINE');
     }
+    // Update last ping time
+    try {
+      const ps = await api('GET', '/api/pc_status');
+      if (ps && ps.last_ping) {
+        const ago = Math.round((Date.now() / 1000) - ps.last_ping);
+        el('ovLastPing').textContent = ago < 5 ? 'just now' : ago + 's ago';
+      } else {
+        el('ovLastPing').textContent = 'never';
+      }
+    } catch(e) {}
   } catch(e) {
     setPill('piPill', 'err', 'Unreachable');
     setHeaderStatus('offline', 'PI OFFLINE');
@@ -1062,6 +1119,49 @@ function setPill(id, type, text) {
   const s = colors[type] || colors.warn;
   p.style.color = s.c; p.style.background = s.bg; p.style.border = `1px solid ${s.b}`;
   p.textContent = text;
+  // Also drive the row icon if present
+  const iconMap = {
+    backendPill: 'sicon-backend',
+    piPill:      'sicon-pi',
+    pycawPill:   'sicon-pycaw',
+    winsdkPill:  'sicon-winsdk',
+  };
+  const iconEl = el(iconMap[id]);
+  if (iconEl) {
+    iconEl.className = 'status-row-icon ' + (type || '');
+    const icons = { ok: '◆', err: '✕', warn: '◈' };
+    iconEl.textContent = icons[type] || '⬡';
+  }
+  // Update the summary dot/text based on overall state
+  _updateStatusSummary();
+}
+
+const _pillStates = {};
+function _updateStatusSummary() {
+  // Collect current pill types
+  ['backendPill','piPill','pycawPill','winsdkPill'].forEach(id => {
+    const p = el(id);
+    if (!p) return;
+    // Infer type from colour
+    const c = p.style.color;
+    if (c.includes('230,118') || c.includes('green')) _pillStates[id] = 'ok';
+    else if (c.includes('255,23') || c.includes('red'))  _pillStates[id] = 'err';
+    else _pillStates[id] = 'warn';
+  });
+  const dot  = el('statusDotBig');
+  const summ = el('statusSummary');
+  if (!dot || !summ) return;
+  const vals = Object.values(_pillStates);
+  if (vals.filter(v=>v==='ok').length === 4) {
+    dot.style.background = 'var(--green)'; dot.style.boxShadow = '0 0 8px var(--green)';
+    summ.textContent = 'ALL SYSTEMS OK'; summ.style.color = 'var(--green)';
+  } else if (vals.some(v=>v==='err')) {
+    dot.style.background = 'var(--red)'; dot.style.boxShadow = 'none';
+    summ.textContent = 'DEGRADED'; summ.style.color = 'var(--red)';
+  } else {
+    dot.style.background = 'var(--amber)'; dot.style.boxShadow = '0 0 8px var(--amber)';
+    summ.textContent = 'PARTIAL'; summ.style.color = 'var(--amber)';
+  }
 }
 
 function toast(msg, type = 'info') {

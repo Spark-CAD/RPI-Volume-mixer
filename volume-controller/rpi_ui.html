@@ -19,9 +19,9 @@
   --cyan-glow: rgba(0,229,255,0.18);
   --green:     #00e676;
   --red:       #ff1744;
-  --text:      #b8c8dc;
-  --text-dim:  #4a6080;
-  --text-faint:#1e2d3d;
+  --text:      #d0e4f8;
+  --text-dim:  #7eb8e8;
+  --text-faint:#4a88c0;
   --mono:      'Share Tech Mono', monospace;
   --display:   'Oxanium', sans-serif;
   --body:      'Rajdhani', sans-serif;
@@ -159,7 +159,7 @@ body::after {
 }
 .lw-waveform-lbl {
   position: absolute; top: 10px; left: 10px;
-  font-family: var(--mono); font-size: 7px; letter-spacing: 2px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
   color: rgba(0,230,118,0.3); text-transform: uppercase; pointer-events:none;
 }
 
@@ -178,7 +178,7 @@ body::after {
 }
 .lw-spectrum-lbl {
   position: absolute; top: 10px; left: 10px;
-  font-family: var(--mono); font-size: 7px; letter-spacing: 2px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
   color: rgba(180,100,255,0.35); text-transform: uppercase; pointer-events:none;
 }
 
@@ -195,7 +195,7 @@ body::after {
 }
 .src-dot.live { background: var(--cyan); box-shadow: 0 0 7px var(--cyan); }
 .src-tag {
-  font-family: var(--mono); font-size: 9px; letter-spacing: 3px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
   color: var(--text-faint); text-transform: uppercase; transition: color 0.4s;
 }
 .src-tag.live { color: var(--cyan); opacity: 0.8; }
@@ -225,7 +225,7 @@ body::after {
 .time-row {
   display: flex; justify-content: space-between; margin-bottom: 8px;
 }
-.time-val { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+.time-val { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
 .prog-track {
   height: 3px; background: var(--border); border-radius: 2px;
   margin-bottom: 14px; cursor: pointer; position: relative;
@@ -275,7 +275,7 @@ body::after {
   display: flex; flex-direction: column; gap: 8px;
 }
 .w-header { display: flex; justify-content: space-between; align-items: baseline; }
-.w-lbl { font-family: var(--mono); font-size: 8px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; }
+.w-lbl { font-family: var(--mono); font-size: 12px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; }
 .w-num { font-family: var(--mono); font-size: 32px; font-weight: 700; color: var(--amber); text-shadow: 0 0 14px var(--amber-glow); line-height: 1; }
 .w-unit { font-size: 11px; color: var(--text-dim); }
 .vu-bars { display: flex; gap: 6px; flex: 1; }
@@ -288,10 +288,10 @@ body::after {
   width: 100%; transition: height 0.07s ease-out;
   background: linear-gradient(to top, var(--green) 0%, #aaff44 62%, #ffee22 78%, var(--red) 94%);
 }
-.vu-lbl { font-family: var(--mono); font-size: 8px; color: var(--text-faint); text-align: center; }
+.vu-lbl { font-family: var(--mono); font-size: 12px; color: var(--text-faint); text-align: center; }
 .w-src-row { display: flex; justify-content: space-between; }
-.w-src-lbl { font-family: var(--mono); font-size: 8px; color: var(--text-faint); letter-spacing: 1px; }
-.w-src-val { font-family: var(--mono); font-size: 8px; color: var(--text-dim); }
+.w-src-lbl { font-family: var(--mono); font-size: 12px; color: var(--text-faint); letter-spacing: 1px; }
+.w-src-val { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
 /* ── Clock widget ── */
 .w-clock {
   height: 100%; display: flex; flex-direction: column;
@@ -303,24 +303,97 @@ body::after {
   text-shadow: 0 0 30px rgba(0,229,255,0.15);
 }
 .clk-secs { font-family: var(--mono); font-size: 18px; color: var(--cyan); opacity: 0.55; }
-.clk-date { font-family: var(--mono); font-size: 9px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 8px; }
+.clk-date { font-family: var(--mono); font-size: 11px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 8px; }
 /* ── Sysinfo widget ── */
 .w-sysinfo {
-  height: 100%; padding: 16px 18px;
-  display: flex; flex-direction: column; justify-content: space-around;
+  height: 100%; padding: 10px 14px 12px;
+  display: flex; flex-direction: column; gap: 0;
 }
-.si-row { display: flex; flex-direction: column; gap: 5px; }
-.si-head { display: flex; justify-content: space-between; align-items: baseline; }
-.si-lbl { font-family: var(--mono); font-size: 8px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; }
-.si-val { font-family: var(--mono); font-size: 18px; font-weight: bold; }
-.si-val.ok   { color: var(--green); }
-.si-val.warn { color: var(--amber); }
-.si-val.hot  { color: var(--red);   }
-.si-bar { height: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
-.si-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease-out; }
-.si-fill.cpu  { background: linear-gradient(90deg, #0050ff, #00e5ff); }
-.si-fill.ram  { background: linear-gradient(90deg, #9c00ff, #d500f9); }
-.si-fill.temp { background: linear-gradient(90deg, #00e676, #ffb340, #ff1744); }
+.si-title {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 3px;
+  color: var(--text-faint); text-transform: uppercase;
+  text-align: center; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border); margin-bottom: 10px;
+  position: relative; display: flex; align-items: center; justify-content: center;
+}
+.si-title-text { flex: 1; text-align: center; }
+.si-dots {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  display: flex; gap: 5px; padding-right: 2px;
+}
+.si-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); transition: all 0.3s; cursor: pointer; }
+.si-dot.active { background: var(--cyan); box-shadow: 0 0 5px var(--cyan); }
+/* Swipe viewport */
+.si-swipe-wrap {
+  flex: 1; overflow: hidden; position: relative;
+}
+.si-swipe-track {
+  display: flex; height: 100%;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+}
+.si-panel {
+  min-width: 100%; height: 100%;
+  display: flex; flex-direction: column; gap: 6px; justify-content: space-around;
+}
+/* Pi info panel */
+.pi-info-row {
+  display: flex; align-items: center; gap: 10px; padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pi-info-row:last-child { border-bottom: none; }
+.pi-info-lbl {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+  color: var(--text-faint); text-transform: uppercase; width: 52px; flex-shrink: 0;
+}
+.pi-info-val {
+  font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+.pi-info-val.hi { color: var(--cyan); }
+.pi-info-val.warn { color: var(--amber); }
+.pi-info-val.hot { color: var(--red); }
+.si-gauges {
+  display: flex; flex-direction: column; gap: 6px; flex: 1;
+  justify-content: space-around;
+}
+.si-gauge-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.si-ring-wrap {
+  position: relative; width: 52px; height: 52px; flex-shrink: 0;
+}
+.si-ring-wrap svg { width: 52px; height: 52px; transform: rotate(-90deg); }
+.si-ring-bg   { fill: none; stroke: var(--surface); stroke-width: 4; }
+.si-ring-fill { fill: none; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease-out; }
+.si-ring-fill.cpu  { stroke: var(--cyan); filter: drop-shadow(0 0 4px var(--cyan)); }
+.si-ring-fill.ram  { stroke: #d500f9;     filter: drop-shadow(0 0 4px #d500f9); }
+.si-ring-fill.temp { stroke: var(--amber);filter: drop-shadow(0 0 4px var(--amber)); }
+.si-ring-val {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-size: 12px; font-weight: 700;
+  line-height: 1;
+}
+.si-ring-val.cpu  { color: var(--cyan); }
+.si-ring-val.ram  { color: #d500f9; }
+.si-ring-val.temp { color: var(--amber); }
+.si-ring-val.hot  { color: var(--red); }
+.si-gauge-info { flex: 1; min-width: 0; }
+.si-gauge-lbl {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--text-faint); margin-bottom: 3px;
+}
+.si-gauge-sub {
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+}
+.si-gauge-bar-wrap {
+  height: 2px; background: var(--surface); border-radius: 1px; overflow: hidden;
+  margin-top: 5px;
+}
+.si-gauge-bar { height: 100%; border-radius: 1px; transition: width 0.6s ease-out; }
+.si-gauge-bar.cpu  { background: linear-gradient(90deg, #0050ff, var(--cyan)); }
+.si-gauge-bar.ram  { background: linear-gradient(90deg, #9c00ff, #d500f9); }
+.si-gauge-bar.temp { background: linear-gradient(90deg, var(--green), var(--amber), var(--red)); }
 
 /* ═══ QUICK LAUNCH BAR ═════════════════════════════════════════════════════ */
 .launch-bar {
@@ -365,7 +438,7 @@ body::after {
 .launch-btn.empty:hover { background: transparent; border-color: var(--border); }
 .lb-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
 .lb-label {
-  font-family: var(--mono); font-size: 8px; letter-spacing: 0.5px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.5px;
   color: var(--text-dim); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; text-align: center; width: 100%;
 }
@@ -405,14 +478,14 @@ body::after {
 /* Channel number badge — top-left */
 .pot-ch-badge {
   position: absolute; top: 4px; left: 5px;
-  font-family: var(--mono); font-size: 7px; color: var(--text-faint);
+  font-family: var(--mono); font-size: 11px; color: var(--text-faint);
   opacity: 0.5; letter-spacing: 0.5px;
 }
 
 /* AUTO pill — replaces MAN/AUTO badge */
 .pot-mode-pill {
   position: absolute; top: 4px; right: 5px;
-  font-family: var(--mono); font-size: 6px; letter-spacing: 1px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 1px;
   padding: 1px 4px; border-radius: 3px; text-transform: uppercase;
 }
 .pot-mode-pill.man {
@@ -432,17 +505,17 @@ body::after {
   color: var(--amber); text-shadow: 0 0 8px var(--amber-glow);
   z-index: 1; line-height: 1;
 }
-.pot-val.dim { color: var(--text-faint); text-shadow: none; font-size: 10px; }
+.pot-val.dim { color: var(--text-faint); text-shadow: none; font-size: 12px; }
 
 /* App name — below %, smaller, wraps with ellipsis */
 .pot-name {
-  font-family: var(--mono); font-size: 8px; letter-spacing: 0.3px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.3px;
   color: var(--text-dim); text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   width: 100%; padding: 0 3px; z-index: 1;
   transition: color 0.2s;
 }
-.pot-name.empty    { color: var(--text-faint); font-size: 7px; }
+.pot-name.empty    { color: var(--text-faint); font-size: 11px; }
 .pot-name.autoname { color: rgba(255,179,64,0.7); }
 
 /* Accent colour stripe at top of assigned pot */
@@ -475,11 +548,11 @@ body::after {
   width: 30px; height: 30px; border-radius: 7px;
   background: var(--cyan-glow); border: 1px solid rgba(0,229,255,0.2);
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono); font-size: 9px; color: var(--cyan);
+  font-family: var(--mono); font-size: 11px; color: var(--cyan);
 }
 .m-title-col { flex: 1; }
 .m-title { font-family: var(--display); font-size: 14px; font-weight: 700; color: #dce8f8; letter-spacing: 1px; }
-.m-sub { font-family: var(--mono); font-size: 7px; color: var(--text-faint); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+.m-sub { font-family: var(--mono); font-size: 11px; color: var(--text-faint); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
 .m-close {
   width: 26px; height: 26px; border-radius: 50%;
   background: var(--raised); border: 1px solid var(--border);
@@ -495,7 +568,7 @@ body::after {
 }
 .msw {
   flex: 1; padding: 10px 4px; background: none; border: none;
-  cursor: pointer; font-family: var(--mono); font-size: 8px;
+  cursor: pointer; font-family: var(--mono); font-size: 12px;
   letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase;
   display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.15s;
 }
@@ -503,7 +576,7 @@ body::after {
 .msw.on.manual { background: rgba(0,229,255,0.08); color: var(--cyan); }
 .msw.on.auto   { background: rgba(255,179,64,0.08); color: var(--amber); }
 .sect-lbl {
-  font-family: var(--mono); font-size: 7px; letter-spacing: 2.5px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 2.5px;
   color: var(--text-faint); text-transform: uppercase; margin-bottom: 10px;
 }
 .app-sel { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-bottom: 16px; }
@@ -516,7 +589,7 @@ body::after {
 .app-chip:hover { border-color: var(--border-hi); background: var(--raised); }
 .app-chip.sel { border-color: var(--cyan); background: rgba(0,229,255,0.07); box-shadow: 0 0 14px rgba(0,229,255,0.1); }
 .ac-icon { font-size: 20px; line-height: 1; }
-.ac-name { font-family: var(--mono); font-size: 7px; color: var(--text-dim); letter-spacing: 0.5px; }
+.ac-name { font-family: var(--mono); font-size: 11px; color: var(--text-dim); letter-spacing: 0.5px; }
 .app-chip.sel .ac-name { color: var(--cyan); }
 .auto-desc { background: rgba(255,179,64,0.04); border: 1px solid rgba(255,179,64,0.18); border-radius: 8px; padding: 12px 14px; display: none; margin-bottom: 16px; }
 .auto-desc.show { display: block; }
@@ -525,7 +598,7 @@ body::after {
 .m-actions { display: flex; gap: 8px; }
 .mact {
   flex: 1; padding: 10px; border-radius: 7px; border: none; cursor: pointer;
-  font-family: var(--mono); font-size: 8px; letter-spacing: 1.5px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 1.5px;
   text-transform: uppercase; transition: all 0.12s;
 }
 .mact.cancel  { background: var(--surface); color: var(--text-dim); border: 1px solid var(--border); }
@@ -652,7 +725,7 @@ const APPS = [
   { id:'vlc.exe',        name:'VLC',       icon:'▶',  bg:'#2a1a00', accent:'#ff8800' },
   { id:'msedge.exe',     name:'Edge',      icon:'◌',  bg:'#0a1830', accent:'#0078d4' },
   { id:'foobar2000.exe', name:'Foobar',    icon:'♫',  bg:'#0d2222', accent:'#0cd1e8' },
-  { id:'steam.exe',      name:'Steam',     icon:'⊞',  bg:'#0f1a28', accent:'#1b2838' },
+  { id:'steam.exe',      name:'Steam',     icon:'⊞',  bg:'#0f1a28', accent:'#66c0f4' },
   { id:'epicgameslauncher.exe', name:'Epic', icon:'⬡', bg:'#1e0a28', accent:'#9d4dfa' },
 ];
 
@@ -716,6 +789,26 @@ async function loadAllConfig() {
 
   renderPots();
   renderLaunchBar();
+
+  // Pull current resolved auto-app names from PC immediately so pots show
+  // correct names on Pi reboot without waiting for the PC to push them.
+  _fetchAndApplyPotDisplay();
+}
+
+async function _fetchAndApplyPotDisplay() {
+  // Pi proxies the PC's /api/pot_display for us
+  const d = await apiFetch('/api/pc_pot_display');
+  if (!d) return;
+  // d is {ch_str: display_name, ...} e.g. {'0': 'Spotify', '2': 'Chrome'}
+  let changed = false;
+  Object.entries(d).forEach(([ch, name]) => {
+    const i = parseInt(ch);
+    if (pots[i] && pots[i].mode === 'auto' && pots[i].resolvedApp !== name) {
+      pots[i].resolvedApp = name;
+      changed = true;
+    }
+  });
+  if (changed) renderPots();
 }
 
 // ══════════════════════════════════════════════════
@@ -785,31 +878,57 @@ async function pollStatus() {
 }
 
 async function pollSysInfo() {
-  if (activeWidget !== 'sysinfo') return;
-  const d = await apiFetch('/api/pc_sysinfo');
+  if (activeWidget !== 'sysinfo') return;  const d = await apiFetch('/api/pc_sysinfo');
   if (!d) return;
-  const set = (id, val, unit='%') => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val + unit;
-  };
-  const cls = v => v > 85 ? 'si-val hot' : v > 60 ? 'si-val warn' : 'si-val ok';
-  const bar = (id, pct) => { const el=document.getElementById(id); if(el) el.style.width=pct+'%'; };
-  const cpu = document.getElementById('siCpu');
-  const ram = document.getElementById('siRam');
-  const tmp = document.getElementById('siTmp');
-  if (cpu) { cpu.textContent = d.cpu+'%'; cpu.className = cls(d.cpu); }
-  if (ram) { ram.textContent = d.ram+'%'; ram.className = cls(d.ram); }
-  if (tmp) {
-    const label = d.temp_label || 'TEMP';
-    tmp.textContent = d.temp ? d.temp+'°C' : 'N/A';
-    tmp.className = cls(d.temp || 0);
-    // Update the label element if it exists
-    const lblEl = document.getElementById('siTmpLbl');
-    if (lblEl) lblEl.textContent = label;
+
+  const C = 52, R = 22, CIRC = 2 * Math.PI * R;
+
+  function updateRing(ringCls, pct) {
+    // Find the fill circle inside this ring-wrap by its class
+    const fills = document.querySelectorAll('.si-ring-fill.' + ringCls);
+    fills.forEach(el => {
+      el.style.strokeDasharray  = CIRC;
+      el.style.strokeDashoffset = CIRC * (1 - Math.min(pct,100) / 100);
+    });
   }
+
+  const bar = (id, pct) => { const el=document.getElementById(id); if(el) el.style.width=Math.min(pct,100)+'%'; };
+
+  // CPU
+  const cpu = document.getElementById('siCpu');
+  if (cpu) {
+    cpu.textContent = d.cpu + '%';
+    cpu.className = 'si-ring-val cpu';
+  }
+  const cpuSub = document.getElementById('siCpuSub');
+  if (cpuSub) cpuSub.textContent = d.cpu > 85 ? 'HIGH' : d.cpu > 60 ? 'MODERATE' : 'NORMAL';
+  updateRing('cpu', d.cpu);
   bar('siCpuBar', d.cpu);
+
+  // RAM
+  const ram = document.getElementById('siRam');
+  if (ram) {
+    ram.textContent = d.ram + '%';
+    ram.className = 'si-ring-val ram';
+  }
+  const ramSub = document.getElementById('siRamSub');
+  if (ramSub) ramSub.textContent = d.ram > 85 ? 'HIGH' : d.ram > 60 ? 'MODERATE' : 'NORMAL';
+  updateRing('ram', d.ram);
   bar('siRamBar', d.ram);
-  bar('siTmpBar', Math.min(100, d.temp*100/80));
+
+  // Temp
+  const tmp = document.getElementById('siTmp');
+  const tempPct = Math.min(100, (d.temp || 0) * 100 / 100);
+  if (tmp) {
+    tmp.textContent = d.temp ? d.temp + '°' : 'N/A';
+    tmp.className = 'si-ring-val ' + (d.temp > 80 ? 'hot' : 'temp');
+  }
+  const tmpLbl = document.getElementById('siTmpLbl');
+  if (tmpLbl) tmpLbl.textContent = (d.temp_label || 'TEMP').replace(/\(.*\)/,'').trim().toUpperCase();
+  const tmpSub = document.getElementById('siTmpSub');
+  if (tmpSub) tmpSub.textContent = d.temp ? d.temp + '°C' : 'N/A';
+  updateRing('temp', tempPct);
+  bar('siTmpBar', tempPct);
 }
 
 // ══════════════════════════════════════════════════
@@ -822,6 +941,95 @@ async function pollSysInfo() {
 
 setInterval(pollStatus,  500);
 setInterval(pollSysInfo, 3000);
+let _siPage = 0;  // 0 = PC, 1 = Pi
+
+function _siGoTo(page) {
+  _siPage = page;
+  const track = document.getElementById('siTrack');
+  if (track) track.style.transform = `translateX(${-page * 100}%)`;
+  const TITLES = ['PC SYSTEM', 'PI STATUS'];
+  const titleEl = document.getElementById('siTitleText');
+  if (titleEl) titleEl.textContent = TITLES[page];
+  [0, 1].forEach(i => {
+    const d = document.getElementById(`siDot${i}`);
+    if (d) d.classList.toggle('active', i === page);
+  });
+  if (page === 1) pollPiInfo();
+  if (page === 0) pollSysInfo();
+}
+
+function _initSysInfoSwipe() {
+  _siPage = 0;
+  // Defer one frame so the template DOM is fully rendered before we query it
+  requestAnimationFrame(() => {
+    const wrap = document.getElementById('siSwipeWrap');
+    if (!wrap) return;
+    let sx = null;
+
+    const onStart = e => { sx = (e.touches ? e.touches[0] : e).clientX; };
+    const onEnd   = e => {
+      if (sx === null) return;
+      const dx = (e.changedTouches ? e.changedTouches[0] : e).clientX - sx;
+      sx = null;
+      if (Math.abs(dx) < 25) return;
+      const next = Math.max(0, Math.min(1, _siPage + (dx < 0 ? 1 : -1)));
+      if (next !== _siPage) _siGoTo(next);
+    };
+
+    wrap.addEventListener('touchstart', onStart, {passive: true});
+    wrap.addEventListener('touchend',   onEnd,   {passive: true});
+    wrap.addEventListener('mousedown',  onStart);
+    wrap.addEventListener('mouseup',    onEnd);
+
+    // Tap the dots or title to cycle
+    const titleEl = document.getElementById('siTitleText');
+    if (titleEl) titleEl.addEventListener('click', () => _siGoTo(_siPage === 0 ? 1 : 0));
+    ['siDot0','siDot1'].forEach((id, i) => {
+      const d = document.getElementById(id);
+      if (d) d.addEventListener('click', () => _siGoTo(i));
+    });
+  });
+}
+
+async function pollPiInfo() {
+  if (activeWidget !== 'sysinfo') return;
+  const set = (id, val, cls) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (cls !== undefined) el.className = 'pi-info-val ' + cls;
+  };
+
+  // Pi CPU/RAM/Temp
+  const d = await apiFetch('/api/sysinfo');
+  if (d) {
+    set('piCpu',  d.cpu  + '%',  d.cpu  > 85 ? 'warn' : 'hi');
+    set('piRam',  d.ram  + '%',  d.ram  > 85 ? 'warn' : 'hi');
+    set('piTemp', d.temp ? d.temp + '°C' : 'N/A', d.temp > 75 ? 'hot' : d.temp > 60 ? 'warn' : '');
+  }
+
+  // PC IP from status
+  const st = await apiFetch('/api/status');
+  if (st) set('piIp', st.pc_ip || 'not set', st.pc_ip ? '' : 'warn');
+
+  // Uptime from /proc/uptime via Pi sysinfo (if available), else show page uptime
+  try {
+    const up = await apiFetch('/api/uptime');
+    if (up && up.seconds) {
+      const s = Math.floor(up.seconds);
+      const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+      set('piUptime', d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m`, '');
+    } else { throw new Error('no endpoint'); }
+  } catch {
+    // Fallback: show how long the Pi UI has been running (page load time)
+    const s = Math.floor(performance.now() / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    set('piUptime', `${h}h ${m}m (UI)`, '');
+  }
+}
+
+setInterval(pollSysInfo, 3000);
+setInterval(() => { if (activeWidget === 'sysinfo' && _siPage === 1) pollPiInfo(); }, 5000);
 
 // ══════════════════════════════════════════════════
 // WIDGET SYSTEM
@@ -857,21 +1065,71 @@ const WIDGETS = {
       <div class="clk-date" id="clkDate">—</div>
     </div>`,
 
-  sysinfo: () => `
-    <div class="w-sysinfo">
-      <div class="si-row">
-        <div class="si-head"><span class="si-lbl">CPU</span><span class="si-val ok" id="siCpu">—</span></div>
-        <div class="si-bar"><div class="si-fill cpu" id="siCpuBar" style="width:0%"></div></div>
+  sysinfo: () => {
+    const C = 52, R = 22, CIRC = 2 * Math.PI * R;
+    const ring = (cls, pct) => {
+      const off = CIRC * (1 - (pct / 100));
+      return `<svg viewBox="0 0 ${C} ${C}">
+        <circle class="si-ring-bg"   cx="${C/2}" cy="${C/2}" r="${R}"/>
+        <circle class="si-ring-fill ${cls}" cx="${C/2}" cy="${C/2}" r="${R}"
+          stroke-dasharray="${CIRC}" stroke-dashoffset="${off}"/>
+      </svg>`;
+    };
+    return `
+    <div class="w-sysinfo" id="siRoot">
+      <div class="si-title">
+        <span class="si-title-text" id="siTitleText">PC SYSTEM</span>
+        <div class="si-dots">
+          <div class="si-dot active" id="siDot0"></div>
+          <div class="si-dot"       id="siDot1"></div>
+        </div>
       </div>
-      <div class="si-row">
-        <div class="si-head"><span class="si-lbl">RAM</span><span class="si-val ok" id="siRam">—</span></div>
-        <div class="si-bar"><div class="si-fill ram" id="siRamBar" style="width:0%"></div></div>
+      <div class="si-swipe-wrap" id="siSwipeWrap">
+        <div class="si-swipe-track" id="siTrack">
+
+          <!-- Panel 0: PC stats -->
+          <div class="si-panel">
+            <div class="si-gauges">
+              <div class="si-gauge-row">
+                <div class="si-ring-wrap">${ring('cpu', 0)}<div class="si-ring-val cpu" id="siCpu">—</div></div>
+                <div class="si-gauge-info">
+                  <div class="si-gauge-lbl">CPU</div>
+                  <div class="si-gauge-sub" id="siCpuSub">—</div>
+                  <div class="si-gauge-bar-wrap"><div class="si-gauge-bar cpu" id="siCpuBar" style="width:0%"></div></div>
+                </div>
+              </div>
+              <div class="si-gauge-row">
+                <div class="si-ring-wrap">${ring('ram', 0)}<div class="si-ring-val ram" id="siRam">—</div></div>
+                <div class="si-gauge-info">
+                  <div class="si-gauge-lbl">RAM</div>
+                  <div class="si-gauge-sub" id="siRamSub">—</div>
+                  <div class="si-gauge-bar-wrap"><div class="si-gauge-bar ram" id="siRamBar" style="width:0%"></div></div>
+                </div>
+              </div>
+              <div class="si-gauge-row">
+                <div class="si-ring-wrap">${ring('temp', 0)}<div class="si-ring-val temp" id="siTmp">—</div></div>
+                <div class="si-gauge-info">
+                  <div class="si-gauge-lbl" id="siTmpLbl">TEMP</div>
+                  <div class="si-gauge-sub" id="siTmpSub">—</div>
+                  <div class="si-gauge-bar-wrap"><div class="si-gauge-bar temp" id="siTmpBar" style="width:0%"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 1: Pi stats -->
+          <div class="si-panel" style="padding: 0 2px;">
+            <div class="pi-info-row"><div class="pi-info-lbl">CPU</div><div class="pi-info-val hi" id="piCpu">—</div></div>
+            <div class="pi-info-row"><div class="pi-info-lbl">RAM</div><div class="pi-info-val hi" id="piRam">—</div></div>
+            <div class="pi-info-row"><div class="pi-info-lbl">TEMP</div><div class="pi-info-val" id="piTemp">—</div></div>
+            <div class="pi-info-row"><div class="pi-info-lbl">IP</div><div class="pi-info-val" id="piIp">—</div></div>
+            <div class="pi-info-row"><div class="pi-info-lbl">UPTIME</div><div class="pi-info-val" id="piUptime">—</div></div>
+          </div>
+
+        </div>
       </div>
-      <div class="si-row">
-        <div class="si-head"><span class="si-lbl">TEMP</span><span class="si-val ok" id="siTmp">—</span></div>
-        <div class="si-bar"><div class="si-fill temp" id="siTmpBar" style="width:0%"></div></div>
-      </div>
-    </div>`,
+    </div>`;
+  },
 };
 
 function setWidget(name) {
@@ -881,9 +1139,9 @@ function setWidget(name) {
   clearInterval(clockTimer);
   const col = document.getElementById('widgetCol');
   col.innerHTML = WIDGETS[name] ? WIDGETS[name]() : '';
-  if (name === 'clock')  startClock();
-  if (name === 'sysinfo') pollSysInfo();
-  if (name === 'vu')     startVuTick();
+  if (name === 'clock')   startClock();
+  if (name === 'sysinfo') { pollSysInfo(); pollPiInfo(); _initSysInfoSwipe(); }
+  if (name === 'vu')      startVuTick();
   // Re-sync master pct if vu
   const master = pots.find(p => p.app === 'Master');
   if (master && master.value >= 0) updateVUMaster(master.value);
@@ -931,16 +1189,11 @@ function vuTick() {
   const vuL = document.getElementById('vuL');
   const vuR = document.getElementById('vuR');
   if (vuL && vuR && activeWidget === 'vu') {
-    if (playing && _peaksSmooth.l > 0.001) {
-      vuL.style.height = Math.round(_peaksSmooth.l * 100) + '%';
-      vuR.style.height = Math.round(_peaksSmooth.r * 100) + '%';
-    } else {
-      vuL.style.height = '1%';
-      vuR.style.height = '1%';
-    }
-    _vuTickTimer = setTimeout(vuTick, 60);
+    _tickPeaks(performance.now());
+    vuL.style.height = Math.max(1, Math.round(_peaksSmooth.l * 100)) + '%';
+    vuR.style.height = Math.max(1, Math.round(_peaksSmooth.r * 100)) + '%';
+    _vuTickTimer = setTimeout(vuTick, 16);  // ~60fps
   } else {
-    // Widget switched away or elements gone — stop the chain
     _vuTickTimer = null;
   }
 }
@@ -1148,8 +1401,17 @@ function appColor(app) {
   if (!app) return {bg:'var(--panel)', accent:'#2a3a4a'};
   const low = app.toLowerCase();
   const a = APPS.find(a => a.id.toLowerCase() === low);
-  return a ? {bg:a.bg||'var(--panel)', accent:a.accent||'#00e5ff'}
-           : {bg:'var(--panel)', accent:'#2a3a4a'};
+  if (!a) return {bg:'var(--panel)', accent:'#2a3a4a'};
+  // Guard: ensure accent is never too dark or desaturated to read on the dark UI.
+  // Parse hex to check perceived brightness; if < 80/255, lift to a safe fallback.
+  let accent = a.accent || '#00e5ff';
+  try {
+    const hex = accent.replace('#','');
+    const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+    const luma = 0.299*r + 0.587*g + 0.114*b;
+    if (luma < 80) accent = '#00e5ff'; // too dark — use default cyan
+  } catch(e) {}
+  return {bg: a.bg || 'var(--panel)', accent};
 }
 
 function renderPots() {
@@ -1291,7 +1553,7 @@ function setPlayingVisual(isPlaying) {
 document.getElementById('btnPlay').onclick = () => {
   const wasPlaying = playing;
   setPlayingVisual(!wasPlaying);
-  _playDebounceUntil = Date.now() + 1800; // ignore poll for 1.8s
+  _playDebounceUntil = Date.now() + 600; // short debounce — just enough to avoid flicker
   apiPost('/api/button_pressed', {button_index:'media_play'});
 };
 document.getElementById('btnPrev').onclick = () => apiPost('/api/button_pressed', {button_index:'media_prev'});
@@ -1305,16 +1567,36 @@ const LEFT_WIDGET_ORDER = ['disc', 'circvu', 'waveform', 'spectrum'];
 let activeLeftWidget = 'disc';
 let _lwAnimFrame     = null;   // requestAnimationFrame handle for canvas widgets
 let _lwPlaying       = false;  // current play state for animations
-let _peaks           = {l:0, r:0, master:0, sessions:{}};  // real audio peaks 0-1
-let _peaksSmooth     = {l:0, r:0};  // lightly smoothed for VU bars
+let _peaks           = {l:0, r:0, master:0, sessions:{}};  // latest raw from server
+// Smoothed display values — updated every rAF tick, not every poll
+// This decouples the 60ms HTTP poll from the 60fps render loop so the
+// animation never jumps on a poll boundary.
+let _peaksSmooth     = {l:0, r:0, master:0};
+let _peaksLastTick   = 0;  // DOMHighResTimeStamp of last rAF tick
+
+// No artificial gain — pass peak values through unchanged
+function _peakCurve(x) { return Math.max(0, Math.min(1, x)); }
+
+// Called once per rAF tick by any active animation.
+// Uses actual elapsed ms for frame-rate independent smoothing.
+function _tickPeaks(nowMs) {
+  const dt      = Math.min((nowMs - _peaksLastTick) / 1000, 0.1); // seconds, cap at 100ms
+  _peaksLastTick = nowMs;
+  const ATTACK  = 1 - Math.pow(0.01, dt / 0.04);  // ~40ms attack
+  const RELEASE = 1 - Math.pow(0.01, dt / 0.20);  // ~200ms release
+  for (const ch of ['l', 'r', 'master']) {
+    const raw    = _peakCurve(_peaks[ch] || 0);
+    const smooth = _peaksSmooth[ch] || 0;
+    const alpha  = raw > smooth ? ATTACK : RELEASE;
+    _peaksSmooth[ch] = smooth + (raw - smooth) * alpha;
+  }
+}
 
 async function _pollPeaks() {
   try {
     const d = await apiFetch('/api/pc_peaks');
     if (d && typeof d.master === 'number') {
-      _peaksSmooth.l += (d.l - _peaksSmooth.l) * 0.5;
-      _peaksSmooth.r += (d.r - _peaksSmooth.r) * 0.5;
-      _peaks = d;
+      _peaks = d;  // store raw — smoothing happens in _tickPeaks each rAF
     }
   } catch(e) {}
 }
@@ -1472,17 +1754,28 @@ function _startCircVu() {
   const INNER_R    = 52;
   const MAX_BAR    = 44;
   const BAR_W_DEG  = 5.5;
-  const bars       = Array.from({length: NUM_BARS}, () => ({ h: 2, vel: 0 }));
-  const peaks      = Array.from({length: NUM_BARS}, () => 0);
+  // Per-bar state: current fill level + current rate of change (velocity)
+  const bars  = Array.from({length: NUM_BARS}, () => ({ h: 2, v: 0 }));
+  const peaks = Array.from({length: NUM_BARS}, () => 0);
   let   rotation   = 0;
 
-  function frame() {
+  function frame(nowMs) {
     _lwAnimFrame = requestAnimationFrame(frame);
     if (document.getElementById('circVuCanvas') !== canvas) return;
+    _tickPeaks(nowMs);
+
+    const dt = Math.min((nowMs - (frame._lastT || nowMs)) / 1000, 0.05);
+    frame._lastT = nowMs;
+
+    // Tank model constants (units = bar-height-units per second)
+    const FILL_RATE  = MAX_BAR * 2.2;   // max fill speed
+    const DRAIN_RATE = MAX_BAR * 0.65;  // max drain speed
+    const ACCEL      = MAX_BAR * 5.5;   // slow ramp-up for inertia feel
+
     ctx.clearRect(0, 0, W, H);
 
     // Subtle rotating gradient bg disc
-    rotation += _lwPlaying ? 0.004 : 0;
+    rotation += _peaksSmooth.master > 0.001 ? 0.004 : 0;
     const grd = ctx.createRadialGradient(cx, cy, 10, cx, cy, INNER_R);
     grd.addColorStop(0, '#0a1220');
     grd.addColorStop(1, '#0d1a30');
@@ -1512,18 +1805,23 @@ function _startCircVu() {
     // Update and draw bars
     for (let i = 0; i < NUM_BARS; i++) {
       const b = bars[i];
-      if (_lwPlaying && _peaks.master > 0.001) {
-        // Left half of ring = L channel, right half = R channel
-        const chPk  = i < NUM_BARS / 2 ? (_peaks.l || _peaks.master) : (_peaks.r || _peaks.master);
-        const phase = (i / NUM_BARS) * Math.PI * 2;
-        const shape = 0.35 + 0.65 * Math.pow(Math.abs(Math.sin(phase)), 0.7);
-        const target = chPk * MAX_BAR * shape;
-        b.vel = (target - b.h) * 0.28;
-        b.h   = Math.max(2, b.h + b.vel);
-      } else {
-        b.h = Math.max(2, b.h * 0.88); // decay to rest
+      const chPk  = i < NUM_BARS / 2 ? (_peaksSmooth.l || _peaksSmooth.master) : (_peaksSmooth.r || _peaksSmooth.master);
+      const phase = (i / NUM_BARS) * Math.PI * 2;
+      const shape = 0.35 + 0.65 * Math.pow(Math.abs(Math.sin(phase)), 0.7);
+      const target = (_peaksSmooth.master > 0.001) ? chPk * MAX_BAR * shape : 2;
+
+      // Tank model: velocity ramps toward fill/drain rate — no instantaneous jumps
+      const filling = target > b.h;
+      const maxRate = filling ? FILL_RATE : -DRAIN_RATE;
+      b.v += (maxRate - b.v) * Math.min(1, ACCEL * dt);
+      b.v  = filling ? Math.min(b.v, FILL_RATE) : Math.max(b.v, -DRAIN_RATE);
+      b.h  = Math.max(2, Math.min(MAX_BAR, b.h + b.v * dt));
+      if ((filling && b.h >= target) || (!filling && b.h <= target)) {
+        b.h = Math.max(2, target);
+        b.v = 0;
       }
-      peaks[i] = Math.max(peaks[i] * 0.97, b.h);
+
+      peaks[i] = Math.max(peaks[i] * (1 - dt * 0.8), b.h);
 
       const angle     = (i / NUM_BARS) * Math.PI * 2 - Math.PI / 2 + rotation;
       const halfW     = (BAR_W_DEG * Math.PI / 180) / 2;
@@ -1559,7 +1857,7 @@ function _startCircVu() {
     ctx.lineWidth   = 1;
     ctx.stroke();
   }
-  frame();
+  requestAnimationFrame(frame);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1571,85 +1869,113 @@ function _startWaveform() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
-  let phase = 0;
-  let amp   = 4;  // current amplitude
 
-  function frame() {
+  // Independent phase and amplitude state per channel — prevents bleed
+  let phaseL = 0, phaseR = Math.PI * 0.7;  // start offset so they look different
+  let ampL   = 3, ampR   = 3;
+  let lastT  = 0;
+
+  function frame(nowMs) {
     _lwAnimFrame = requestAnimationFrame(frame);
     if (document.getElementById('waveCanvas') !== canvas) return;
 
-    // Fade trail
-    ctx.fillStyle = 'rgba(5,8,16,0.25)';
+    // Delta-time so speed is frame-rate independent
+    const dt = Math.min((nowMs - lastT) / 1000, 0.05);
+    lastT = nowMs;
+
+    // Tick peak smoothing (shares with VU / other animations)
+    _tickPeaks(nowMs);
+
+    // Use already-smoothed, already-log-curved values
+    const lPk = _peaksSmooth.l;
+    const rPk = _peaksSmooth.r;
+
+    // Per-channel amplitude targets — capped to half-panel height so waves never cross midline
+    const HALF_H = H * 0.22;  // max excursion = 22% of canvas height per channel
+    const targetAmpL = lPk > 0.005 ? 4 + lPk * 28 : 3;
+    const targetAmpR = rPk > 0.005 ? 4 + rPk * 28 : 3;
+    // Fast attack, slow release for amplitude envelope
+    const aAttack = 1 - Math.pow(0.01, dt / 0.03);
+    const aRelease = 1 - Math.pow(0.01, dt / 0.45);
+    ampL = Math.min(HALF_H, ampL + (targetAmpL - ampL) * (targetAmpL > ampL ? aAttack : aRelease));
+    ampR = Math.min(HALF_H, ampR + (targetAmpR - ampR) * (targetAmpR > ampR ? aAttack : aRelease));
+
+    // Phase advances slowly — keep it calm and readable
+    const speedL = lPk > 0.005 ? 0.25 + lPk * 0.55 : 0.06;
+    const speedR = rPk > 0.005 ? 0.25 + rPk * 0.55 : 0.06;
+    phaseL = (phaseL + speedL * dt * Math.PI * 2) % (Math.PI * 200);
+    phaseR = (phaseR + speedR * dt * Math.PI * 2) % (Math.PI * 200);
+
+    // Fade trail — full clear when silent to prevent old image bleed-through
+    const masterPk = _peaksSmooth.master;
+    ctx.fillStyle = masterPk > 0.01 ? 'rgba(5,8,16,0.30)' : 'rgba(5,8,16,0.85)';
     ctx.fillRect(0, 0, W, H);
 
-    const masterPk  = _peaks.master || 0;
-    const targetAmp = (_lwPlaying && masterPk > 0.001) ? 12 + masterPk * 90 : 3;
-    amp += (targetAmp - amp) * 0.12;
-
-    const cy      = H / 2;
-    const speed   = _lwPlaying ? 0.07 : 0.012;
-    phase        += speed;
-
-    // Grid lines
-    ctx.strokeStyle = 'rgba(0,230,118,0.04)';
+    // Dividing line
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
     ctx.lineWidth = 1;
-    for (let y = 0; y < H; y += 32) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
-    for (let x = 0; x < W; x += 32) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+
+    function drawChannel(cy, amp, phase, color, glowColor) {
+      if (amp < 3.1) {
+        // Just draw a flat resting line — no wave drawing overhead
+        ctx.beginPath();
+        ctx.moveTo(0, cy); ctx.lineTo(W, cy);
+        ctx.strokeStyle = `rgba(${color},0.12)`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        return;
+      }
+
+      // Pre-compute path points once, reuse for glow + sharp pass
+      const pts = new Float32Array((W + 1) * 2);
+      for (let x = 0; x <= W; x++) {
+        const t = x / W;
+        pts[x * 2]     = x;
+        pts[x * 2 + 1] = cy
+          + Math.sin(t * Math.PI * 4.7 + phase)          * amp
+          + Math.sin(t * Math.PI * 8.3 + phase * 1.27)   * amp * 0.30
+          + Math.sin(t * Math.PI * 2.1 + phase * 0.55)   * amp * 0.45;
+      }
+
+      // Glow pass
+      ctx.beginPath();
+      ctx.moveTo(pts[0], pts[1]);
+      for (let x = 1; x <= W; x++) ctx.lineTo(pts[x*2], pts[x*2+1]);
+      ctx.strokeStyle = `rgba(${color},0.09)`;
+      ctx.lineWidth = 7;
+      ctx.stroke();
+
+      // Sharp line with gradient
+      ctx.beginPath();
+      ctx.moveTo(pts[0], pts[1]);
+      for (let x = 1; x <= W; x++) ctx.lineTo(pts[x*2], pts[x*2+1]);
+      const grad = ctx.createLinearGradient(0, 0, W, 0);
+      grad.addColorStop(0,   `rgba(${color},0.25)`);
+      grad.addColorStop(0.25,`rgba(${color},0.90)`);
+      grad.addColorStop(0.75,`rgba(${color},0.90)`);
+      grad.addColorStop(1,   `rgba(${color},0.25)`);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth   = 1.5;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur  = amp > 8 ? 7 : 3;
+      ctx.stroke();
+      ctx.shadowBlur  = 0;
     }
 
-    // Centre line
-    ctx.strokeStyle = 'rgba(0,230,118,0.08)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+    const cyL = H * 0.27;
+    const cyR = H * 0.73;
+    drawChannel(cyL, ampL, phaseL, '0,229,255', '#00e5ff');
+    drawChannel(cyR, ampR, phaseR, '0,230,118', '#00e676');
 
-    // Glow pass (wide, faint)
-    ctx.beginPath();
-    ctx.lineWidth = 6;
-    ctx.shadowBlur = 0;
-    for (let x = 0; x <= W; x += 2) {
-      const t = x / W;
-      const y = cy
-        + Math.sin(t * Math.PI * 5 + phase) * amp
-        + Math.sin(t * Math.PI * 9 + phase * 1.3) * amp * 0.35
-        + Math.sin(t * Math.PI * 2 + phase * 0.6) * amp * 0.5;
-      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.strokeStyle = 'rgba(0,230,118,0.12)';
-    ctx.stroke();
-
-    // Sharp line
-    ctx.beginPath();
-    ctx.lineWidth = 1.5;
-    for (let x = 0; x <= W; x += 1) {
-      const t = x / W;
-      const y = cy
-        + Math.sin(t * Math.PI * 5 + phase) * amp
-        + Math.sin(t * Math.PI * 9 + phase * 1.3) * amp * 0.35
-        + Math.sin(t * Math.PI * 2 + phase * 0.6) * amp * 0.5;
-      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    // Gradient stroke
-    const grad = ctx.createLinearGradient(0, 0, W, 0);
-    grad.addColorStop(0,   'rgba(0,230,118,0.3)');
-    grad.addColorStop(0.3, 'rgba(0,230,118,0.9)');
-    grad.addColorStop(0.7, 'rgba(0,230,118,0.9)');
-    grad.addColorStop(1,   'rgba(0,230,118,0.3)');
-    ctx.strokeStyle = grad;
-    ctx.shadowColor = '#00e676';
-    ctx.shadowBlur  = _lwPlaying ? 8 : 2;
-    ctx.stroke();
-    ctx.shadowBlur  = 0;
-
-    // Scan line (moving right → left)
-    const scan = ((Date.now() * 0.04) % W);
-    ctx.strokeStyle = 'rgba(0,230,118,0.18)';
-    ctx.lineWidth   = 1;
-    ctx.beginPath(); ctx.moveTo(W - scan, 0); ctx.lineTo(W - scan, H); ctx.stroke();
+    // Channel labels
+    ctx.font = '11px "Share Tech Mono"';
+    ctx.fillStyle = lPk > 0.01 ? 'rgba(0,229,255,0.65)' : 'rgba(0,229,255,0.22)';
+    ctx.fillText('L', 7, 16);
+    ctx.fillStyle = rPk > 0.01 ? 'rgba(0,230,118,0.65)' : 'rgba(0,230,118,0.22)';
+    ctx.fillText('R', 7, H - 5);
   }
-  frame();
+  requestAnimationFrame(frame);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1666,15 +1992,24 @@ function _startSpectrum() {
   const GAP  = 2;
   const bw   = (W - PAD * 2 - GAP * (NUM - 1)) / NUM;
   const bars = Array.from({length: NUM}, (_, i) => ({
-    h:   2,
-    // Shape: more energy in low-mids, roll off at extremes
+    h: 2, v: 0,
     base: Math.pow(Math.sin((i / (NUM - 1)) * Math.PI), 0.6) * 0.8 + 0.2,
   }));
   const peaks = Array.from({length: NUM}, () => 0);
 
-  function frame() {
+  function frame(nowMs) {
     _lwAnimFrame = requestAnimationFrame(frame);
     if (document.getElementById('specCanvas') !== canvas) return;
+    _tickPeaks(nowMs);
+
+    const dt = Math.min((nowMs - (frame._lastT || nowMs)) / 1000, 0.05);
+    frame._lastT = nowMs;
+
+    // Tank model constants — slow and fluid
+    const FILL_RATE  = (H - 20) * 1.4;   // gentle fill
+    const DRAIN_RATE = (H - 20) * 0.45;  // very slow drain
+    const ACCEL      = (H - 20) * 3.5;   // lazy acceleration
+
     ctx.clearRect(0, 0, W, H);
 
     // Floor grid
@@ -1685,21 +2020,25 @@ function _startSpectrum() {
     }
 
     const maxH = H - 20;
-    const now  = Date.now();
 
     for (let i = 0; i < NUM; i++) {
       const b = bars[i];
-      if (_lwPlaying && (_peaks.master || 0) > 0.001) {
-        // Left bars = L channel, right bars = R channel, b.base provides frequency shaping
-        const chPk  = (i / NUM) < 0.5 ? (_peaks.l || _peaks.master) : (_peaks.r || _peaks.master);
-        const target = b.base * chPk * maxH;
-        b.h += (target - b.h) * 0.28;
-      } else {
-        b.h = Math.max(2, b.h * 0.91);
+      const chPk  = (i / NUM) < 0.5 ? (_peaksSmooth.l || _peaksSmooth.master) : (_peaksSmooth.r || _peaksSmooth.master);
+      const target = (_peaksSmooth.master > 0.001) ? b.base * chPk * maxH : 2;
+
+      const filling = target > b.h;
+      const maxRate = filling ? FILL_RATE : -DRAIN_RATE;
+      b.v += (maxRate - b.v) * Math.min(1, ACCEL * dt);
+      b.v  = filling ? Math.min(b.v, FILL_RATE) : Math.max(b.v, -DRAIN_RATE);
+      b.h  = Math.max(2, Math.min(maxH, b.h + b.v * dt));
+      if ((filling && b.h >= target) || (!filling && b.h <= target)) {
+        b.h = Math.max(2, target);
+        b.v = 0;
       }
-      peaks[i] = (_lwPlaying && _peaks.master > 0.001)
-        ? Math.max(peaks[i] * 0.982, b.h)
-        : Math.max(2, peaks[i] * 0.96);
+
+      peaks[i] = (_peaksSmooth.master > 0.001)
+        ? Math.max(peaks[i] * (1 - dt * 0.9), b.h)
+        : Math.max(2, peaks[i] * (1 - dt * 3.5));
 
       const x = PAD + i * (bw + GAP);
       const y = H - b.h;
@@ -1736,7 +2075,7 @@ function _startSpectrum() {
     }
     ctx.restore();
   }
-  frame();
+  requestAnimationFrame(frame);
 }
 
 // ── App icons map (used by disc colour) ─────────────────────────────────────
@@ -1818,27 +2157,33 @@ const SRC_HUE = {
 };
 
 function applyMediaState(m) {
-  // Play / pause — skip state update during debounce window after button press
+  // Play / pause — always sync from server once debounce window expires.
+  // Short 600ms debounce prevents flicker right after tapping the button,
+  // but rapid media swaps (e.g. YouTube Reels) will resync within one poll cycle.
   const nowPlaying = !!m.playing;
-  if (Date.now() > _playDebounceUntil && nowPlaying !== playing) {
-    setPlayingVisual(nowPlaying);
+  if (Date.now() > _playDebounceUntil) {
+    if (nowPlaying !== playing) setPlayingVisual(nowPlaying);
   }
   // Progress bar + times — Python pre-computed these
   document.getElementById('progFill').style.width  = (m.position_pct || 0) + '%';
   document.getElementById('tElapsed').textContent  = m.elapsed_str  || '0:00';
   document.getElementById('tDuration').textContent = m.duration_str || '0:00';
-  // Title / artist — update on change, then trigger scroll
-  if (m.title && m.title !== lastMediaTitle) {
-    lastMediaTitle = m.title;
-    document.getElementById('tTitle').textContent  = m.title;
-    document.getElementById('tArtist').textContent = m.artist || '—';
+  // Title / artist — update whenever anything meaningful changes.
+  // Use title+artist+source as the key so a same-titled track on a different
+  // source (e.g. rapid YouTube Reels) still triggers a refresh.
+  const mediaKey = `${m.title}|${m.artist}|${m.source}`;
+  if (mediaKey !== lastMediaTitle) {
+    lastMediaTitle = mediaKey;
+    document.getElementById('tTitle').textContent  = m.title || 'Waiting for media...';
+    document.getElementById('tArtist').textContent = m.title ? (m.artist || '—') : '—';
     const srcTag = document.getElementById('srcTag');
     const srcDot = document.getElementById('srcDot');
     const wSrc   = document.getElementById('wSrc');
     if (srcTag) { srcTag.textContent = m.source || ''; srcTag.classList.toggle('live', !!m.source); }
     if (srcDot)   srcDot.classList.toggle('live', !!m.source);
     if (wSrc)     wSrc.textContent = m.source || '—';
-    setTimeout(resetTitleScroll, 100);
+    if (m.title) setTimeout(resetTitleScroll, 100);
+    else         resetTitleScroll();
   }
   // Always update left widget animations
   updateLeftWidget(m);
@@ -1854,6 +2199,10 @@ document.getElementById('btnNext').onclick = () => apiPost('/api/button_pressed'
 setWidget('vu');
 setLeftWidget('disc');
 loadAllConfig();
+
+// Reload every hour to clear any accumulated memory/cache drift
+// (media title poll, peaks accumulation, winsdk session staleness)
+setTimeout(() => location.reload(), 60 * 60 * 1000);
 </script>
 </body>
 </html>
