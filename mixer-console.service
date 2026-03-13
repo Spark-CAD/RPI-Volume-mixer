@@ -1,0 +1,17 @@
+[Unit]
+Description=RPi Audio Console Backend
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/mixer-console
+ExecStart=/usr/bin/python3 /home/pi/mixer-console/rpi_backend.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+# Allow SPI access
+SupplementaryGroups=spi gpio
+
+[Install]
+WantedBy=multi-user.target

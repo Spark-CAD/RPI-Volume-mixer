@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Console</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --bg:        #0a0c10;
+  --surface:   #111520;
+  --panel:     #161b27;
+  --border:    #1e2535;
+  --accent:    #00e5ff;
+  --accent2:   #ff6b35;
+  --green:     #39ff14;
+  --dim:       #2a3550;
+  --text:      #c8d8f0;
+  --text-dim:  #4a5878;
+  --red:       #ff3355;
+  --yellow:    #ffcc00;
+  --font-ui:   'Rajdhani', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+  --radius:    6px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font-ui); font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+#app {
+  display: grid;
+  grid-template-rows: 44px 1fr 136px;
+  grid-template-columns: 260px 1fr;
+  width: 100vw; height: 100vh;
+  gap: 1px; background: var(--border);
+}
+#header  { grid-column: 1 / 3; background: var(--surface); }
+#sidebar { background: var(--panel); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+#main    { background: var(--panel); overflow: hidden; }
+#fader   { grid-column: 1 / 3; background: var(--surface); }
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+#header {
+  display: flex; align-items: center; padding: 0 14px;
+  gap: 12px; border-bottom: 1px solid var(--border);
+}
+.logo {
+  font-size: 17px; font-weight: 700; letter-spacing: 4px;
+  color: var(--accent); text-transform: uppercase;
+  text-shadow: 0 0 16px rgba(0,229,255,0.35); flex-shrink: 0;
+}
+.logo span { color: var(--text-dim); font-weight: 400; }
+
+.conn-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 20px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-size: 10px; font-family: var(--font-mono); color: var(--text-dim);
+  flex-shrink: 0;
+}
+.conn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); transition: background .4s; }
+.conn-dot.live { background: var(--green); animation: blink 2s ease-in-out infinite; box-shadow: 0 0 5px rgba(57,255,20,0.5); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.hdr-track { flex: 1; min-width: 0; overflow: hidden; }
+.hdr-title  { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hdr-artist { font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.hdr-right { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.hdr-time { font-family: var(--font-mono); font-size: 15px; color: var(--accent); }
+.icon-btn {
+  width: 28px; height: 28px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s; touch-action: manipulation; flex-shrink: 0;
+}
+.icon-btn:active { border-color: var(--accent); color: var(--accent); }
+.icon-btn.active { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── Sidebar swipe ───────────────────────────────────────────────────────────── */
+.sb-viewport {
+  flex: 1; overflow: hidden; position: relative;
+  touch-action: pan-x;
+}
+.sb-track {
+  display: flex; width: 200%; height: 100%;
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+  will-change: transform;
+}
+.sb-panel {
+  width: 50%; height: 100%; flex-shrink: 0;
+  padding: 10px 12px 20px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.swipe-dots {
+  position: absolute; bottom: 5px; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 5px;
+}
+.swipe-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); transition: background .2s; }
+.swipe-dot.on { background: var(--accent); }
+
+/* ── Panel labels ────────────────────────────────────────────────────────────── */
+.panel-label {
+  font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--text-dim); font-family: var(--font-mono); flex-shrink: 0;
+  display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+}
+.panel-label::after { content:''; flex:1; height:1px; background: var(--border); }
+
+/* ── Media panel layout — art fills, info+controls stick to bottom ───────────── */
+.media-panel-inner {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+
+/* Art area — takes all remaining space */
+.art-area {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  min-height: 0; padding: 4px 0 8px;
+}
+.album-wrap {
+  /* Fill the art-area height, stay square */
+  height: 100%; aspect-ratio: 1 / 1;
+  max-width: 100%;
+  border-radius: 50%; overflow: hidden;
+  background: var(--dim); position: relative;
+}
+.album-wrap img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; border-radius: 50%; opacity: 0; transition: opacity .3s;
+}
+.album-wrap img.show { opacity: 1; }
+.disc-svg {
+  width: 100%; height: 100%; display: block;
+  animation: spin 5s linear infinite paused;
+}
+.disc-svg.spinning { animation-play-state: running; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Info area — below the art */
+.media-info {
+  flex-shrink: 0; text-align: center; padding: 0 4px 6px;
+}
+.track-title  { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+.track-artist { font-size: 12px; color: var(--text-dim); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.source-pill {
+  margin-top: 4px; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; font-family: var(--font-mono); color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;
+}
+.source-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--accent2); }
+
+/* Progress */
+.progress-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-bottom: 6px; padding: 0 2px; }
+.progress-time { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); flex-shrink: 0; }
+.progress-bar { flex: 1; height: 3px; background: var(--dim); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; box-shadow: 0 0 5px rgba(0,229,255,.5); }
+
+/* Controls — always at the bottom */
+.media-btns { display: flex; gap: 5px; flex-shrink: 0; }
+.media-btns button {
+  flex: 1; height: 44px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-dim); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s; touch-action: manipulation;
+}
+.media-btns button:active { background: var(--dim); color: var(--accent); border-color: var(--accent); }
+.media-btns .play-btn { flex: 1.6; color: var(--accent); border-color: var(--dim); font-size: 16px; }
+.media-btns .play-btn.playing { color: var(--green); border-color: var(--green); box-shadow: 0 0 8px rgba(57,255,20,.2); }
+
+/* ── Sysinfo panel ───────────────────────────────────────────────────────────── */
+.sys-panel-inner {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+.clock-section {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 0;
+}
+.clock-big {
+  font-family: var(--font-mono); font-size: 42px; color: var(--accent);
+  text-align: center; letter-spacing: 3px;
+  text-shadow: 0 0 20px rgba(0,229,255,.3), 0 0 40px rgba(0,229,255,.1);
+  line-height: 1;
+}
+.clock-date {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
+  text-align: center; letter-spacing: 3px; margin-top: 6px;
+}
+
+.stats-section {
+  flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px;
+}
+.sys-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.sys-label {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  width: 34px; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0;
+}
+.sys-bar-wrap { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.sys-bar { width: 100%; height: 8px; background: var(--dim); border-radius: 4px; overflow: hidden; }
+.sys-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+.sys-fill.cpu  { background: linear-gradient(90deg, var(--accent) 0%, rgba(0,229,255,.6) 100%); }
+.sys-fill.mem  { background: linear-gradient(90deg, var(--accent2) 0%, rgba(255,107,53,.6) 100%); }
+.sys-fill.temp { background: linear-gradient(90deg, var(--yellow) 0%, rgba(255,204,0,.6) 100%); }
+.sys-val {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text);
+  width: 46px; text-align: right; flex-shrink: 0;
+}
+
+.conn-section {
+  flex-shrink: 0; display: flex; gap: 8px; padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.conn-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px; background: var(--bg); border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.conn-item-label { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+.conn-item-val   { font-family: var(--font-mono); font-size: 11px; color: var(--text); }
+.conn-item-val.online  { color: var(--green); }
+.conn-item-val.offline { color: var(--red); }
+
+/* ── Main: FFT ───────────────────────────────────────────────────────────────── */
+#main { display: flex; flex-direction: column; padding: 10px; gap: 8px; overflow: hidden; }
+.main-hdr { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.section-label {
+  font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--text-dim); font-family: var(--font-mono);
+  display: flex; align-items: center; gap: 6px; flex: 1;
+}
+.section-label::after { content:''; flex:1; height:1px; background: var(--border); }
+
+.fft-wrap { flex: 1; position: relative; min-height: 0; }
+#fft-canvas { width: 100%; height: 100%; display: block; border-radius: var(--radius); }
+.fft-paused {
+  position: absolute; inset: 0; display: none;
+  align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 3px;
+  background: rgba(10,12,16,.65); border-radius: var(--radius);
+}
+.fft-paused.show { display: flex; }
+
+.vu-row { display: flex; gap: 5px; height: 11px; flex-shrink: 0; }
+.vu-ch  { flex: 1; display: flex; gap: 3px; align-items: center; }
+.vu-lbl { font-family: var(--font-mono); font-size: 8px; color: var(--text-dim); width: 8px; }
+.vu-bar { flex: 1; height: 7px; background: var(--dim); border-radius: 1px; overflow: hidden; }
+.vu-fill {
+  height: 100%; border-radius: 1px; transform-origin: left; transform: scaleX(0);
+  background: linear-gradient(90deg, var(--green) 0%, var(--yellow) 70%, var(--red) 100%);
+}
+
+/* ── Faders ──────────────────────────────────────────────────────────────────── */
+#fader { display: flex; align-items: stretch; padding: 8px 12px; gap: 6px; border-top: 1px solid var(--border); overflow: hidden; }
+.fader-ch { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; cursor: pointer; }
+.fader-ch.assigned .fader-label { color: var(--accent); }
+.fader-label {
+  font-size: 9px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
+  transition: color .2s;
+}
+.fader-track { flex: 1; width: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; position: relative; min-height: 55px; transition: border-color .2s; }
+.fader-ch:active .fader-track { border-color: var(--accent); }
+.fader-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 3px; transition: height .08s; }
+.fader-fill.on  { background: linear-gradient(0deg, rgba(0,229,255,.6) 0%, rgba(0,229,255,.15) 100%); }
+.fader-fill.off { background: linear-gradient(0deg, rgba(42,53,80,.8) 0%, rgba(42,53,80,.3) 100%); }
+.fader-knob {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  width: 16px; height: 5px; border-radius: 3px;
+  background: var(--surface); border: 1px solid var(--dim); transition: bottom .08s, background .2s;
+}
+.fader-ch.assigned .fader-knob { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 5px rgba(0,229,255,.4); }
+.fader-value { font-size: 10px; font-family: var(--font-mono); color: var(--text-dim); }
+.fader-ch.assigned .fader-value { color: var(--text); }
+.ch-num { font-size: 8px; font-family: var(--font-mono); color: var(--dim); }
+.fader-sep { width: 1px; background: var(--border); margin: 4px 0; }
+
+/* ── Modals ──────────────────────────────────────────────────────────────────── */
+.overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px; width: 300px; box-shadow: 0 20px 60px rgba(0,0,0,.8);
+  transform: translateY(16px) scale(.97); transition: transform .2s;
+}
+.overlay.open .modal { transform: none; }
+.modal-title { font-size: 14px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+.modal-sub   { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-bottom: 10px; }
+.app-list { display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: auto; }
+.app-item {
+  padding: 8px 11px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg);
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; gap: 7px; transition: all .12s; touch-action: manipulation;
+}
+.app-item:active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,.05); }
+.app-item.active  { border-color: var(--accent); background: rgba(0,229,255,.1); color: var(--accent); }
+.app-item.s-auto   { color: var(--accent2); border-color: rgba(255,107,53,.3); }
+.app-item.s-master { color: var(--yellow);  border-color: rgba(255,204,0,.3); }
+.app-item.s-clear  { color: var(--text-dim); }
+.app-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.modal-btn {
+  margin-top: 10px; width: 100%; padding: 9px; border-radius: var(--radius);
+  font-family: var(--font-ui); font-size: 12px; cursor: pointer; transition: all .15s; touch-action: manipulation;
+}
+.modal-btn.cancel { background: var(--bg); border: 1px solid var(--border); color: var(--text-dim); }
+.modal-btn.cancel:active { border-color: var(--red); color: var(--red); }
+.modal-btn.save { background: rgba(0,229,255,.1); border: 1px solid var(--accent); color: var(--accent); font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+.settings-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.settings-label { font-size: 11px; color: var(--text-dim); width: 50px; }
+.settings-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 6px 9px; outline: none; transition: border-color .15s; }
+.settings-input:focus { border-color: var(--accent); }
+
+body::after {
+  content:''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.04) 2px, rgba(0,0,0,.04) 4px);
+}
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <div class="logo">MIX<span>CON</span></div>
+    <div class="conn-pill">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-text">OFFLINE</span>
+    </div>
+    <div class="hdr-track">
+      <div class="hdr-title"  id="hdr-title">—</div>
+      <div class="hdr-artist" id="hdr-artist">No media</div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-time" id="hdr-time">00:00</div>
+      <button class="icon-btn" id="fft-btn" onclick="toggleFFT()" title="Pause visualiser">⏸</button>
+      <button class="icon-btn" onclick="openSettings()" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sb-viewport" id="sb-vp">
+      <div class="sb-track" id="sb-track">
+
+        <!-- Panel 0: Media -->
+        <div class="sb-panel">
+          <div class="panel-label">Media</div>
+          <div class="media-panel-inner">
+
+            <!-- Art — fills remaining space -->
+            <div class="art-area">
+              <div class="album-wrap" id="album-wrap">
+                <svg class="disc-svg" id="disc-svg" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="40" cy="40" r="39" fill="#0d1017" stroke="#1e2535" stroke-width="1.5"/>
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="#1a2030" stroke-width=".5"/>
+                  <circle cx="40" cy="40" r="29" fill="none" stroke="#2a3550" stroke-width="1"/>
+                  <circle cx="40" cy="40" r="23" fill="none" stroke="#1a2030" stroke-width=".5"/>
+                  <circle cx="40" cy="40" r="18" fill="none" stroke="#2a3550" stroke-width="1"/>
+                  <circle cx="40" cy="40" r="12" fill="none" stroke="#1a2030" stroke-width=".5"/>
+                  <circle cx="40" cy="40" r="11" fill="#161b27"/>
+                  <path d="M 8 28 Q 40 12 72 28" stroke="rgba(0,229,255,0.1)" stroke-width="7" fill="none" stroke-linecap="round"/>
+                  <circle cx="40" cy="40" r="3.5" fill="#00e5ff" opacity="0.7"/>
+                  <circle cx="40" cy="40" r="1.5" fill="#0a0c10"/>
+                </svg>
+                <img id="album-img" src="" alt="">
+              </div>
+            </div>
+
+            <!-- Info -->
+            <div class="media-info">
+              <div class="track-title"  id="track-title">No media</div>
+              <div class="track-artist" id="track-artist">—</div>
+              <div class="source-pill"><div class="source-dot"></div><span id="source-name">—</span></div>
+            </div>
+
+            <!-- Progress -->
+            <div class="progress-row">
+              <span class="progress-time" id="elapsed">0:00</span>
+              <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+              <span class="progress-time" id="duration">0:00</span>
+            </div>
+
+            <!-- Controls -->
+            <div class="media-btns">
+              <button onclick="mediaCmd('prev')">&#9664;&#9664;</button>
+              <button class="play-btn" id="play-btn" onclick="mediaCmd('play_pause')">&#9654;</button>
+              <button onclick="mediaCmd('next')">&#9654;&#9654;</button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Panel 1: Sysinfo -->
+        <div class="sb-panel">
+          <div class="panel-label">System</div>
+          <div class="sys-panel-inner">
+
+            <!-- Clock centred in remaining space -->
+            <div class="clock-section">
+              <div class="clock-big"  id="clock">00:00:00</div>
+              <div class="clock-date" id="clock-date">—</div>
+            </div>
+
+            <!-- Stats flush to bottom -->
+            <div class="stats-section">
+              <div class="sys-row">
+                <div class="sys-label">CPU</div>
+                <div class="sys-bar-wrap">
+                  <div class="sys-bar"><div class="sys-fill cpu" id="cpu-fill" style="width:0%"></div></div>
+                </div>
+                <div class="sys-val" id="cpu-val">—</div>
+              </div>
+              <div class="sys-row">
+                <div class="sys-label">MEM</div>
+                <div class="sys-bar-wrap">
+                  <div class="sys-bar"><div class="sys-fill mem" id="mem-fill" style="width:0%"></div></div>
+                </div>
+                <div class="sys-val" id="mem-val">—</div>
+              </div>
+              <div class="sys-row">
+                <div class="sys-label">TEMP</div>
+                <div class="sys-bar-wrap">
+                  <div class="sys-bar"><div class="sys-fill temp" id="temp-fill" style="width:0%"></div></div>
+                </div>
+                <div class="sys-val" id="temp-val">—</div>
+              </div>
+            </div>
+
+            <!-- Connection status pills -->
+            <div class="conn-section">
+              <div class="conn-item">
+                <div class="conn-item-label">PC</div>
+                <div class="conn-item-val offline" id="pc-status">Offline</div>
+              </div>
+              <div class="conn-item">
+                <div class="conn-item-label">WebSocket</div>
+                <div class="conn-item-val offline" id="ws-status">Connecting…</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="swipe-dots">
+      <div class="swipe-dot on"  id="dot-0"></div>
+      <div class="swipe-dot"     id="dot-1"></div>
+    </div>
+  </aside>
+
+  <!-- Main: FFT -->
+  <main id="main">
+    <div class="main-hdr">
+      <div class="section-label">Spectrum</div>
+    </div>
+    <div class="fft-wrap">
+      <canvas id="fft-canvas"></canvas>
+      <div class="fft-paused" id="fft-paused">PAUSED</div>
+    </div>
+    <div class="vu-row">
+      <div class="vu-ch"><div class="vu-lbl">L</div><div class="vu-bar"><div class="vu-fill" id="vu-l"></div></div></div>
+      <div class="vu-ch"><div class="vu-lbl">R</div><div class="vu-bar"><div class="vu-fill" id="vu-r"></div></div></div>
+    </div>
+  </main>
+
+  <!-- Faders -->
+  <div id="fader"></div>
+</div>
+
+<!-- Assign modal -->
+<div class="overlay" id="assign-overlay">
+  <div class="modal">
+    <div class="modal-title">Assign Channel</div>
+    <div class="modal-sub" id="assign-sub"></div>
+    <div class="app-list"  id="app-list"></div>
+    <button class="modal-btn cancel" onclick="closeAssign()">Cancel</button>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="overlay" id="settings-overlay">
+  <div class="modal">
+    <div class="modal-title">Settings</div>
+    <div class="settings-row">
+      <div class="settings-label">PC IP</div>
+      <input class="settings-input" id="pc-ip-input" type="text" placeholder="192.168.50.x">
+    </div>
+    <button class="modal-btn save"   onclick="saveSettings()">Save</button>
+    <button class="modal-btn cancel" onclick="closeSettings()">Cancel</button>
+  </div>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+
+function friendly(id) {
+  if (!id)             return '';
+  if (id==='__master__') return 'Master';
+  if (id==='__auto__')   return 'Auto';
+  return id.replace(/__/g,'').replace(/_/g,' ')
+           .split(' ').map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+  pots:      Array(8).fill(50),
+  potConfig: {},
+  potDisp:   Array(8).fill(''),
+  apps:      [],
+  media:     {title:'',artist:'',playing:false,source:'',album_art:'',
+              position:0,duration:0,elapsed_str:'0:00',duration_str:'0:00'},
+  fft:       Array(64).fill(0),
+  peaks:     {l:0,r:0},
+  pcConn:    false,
+  cfg:       {pc_ip:''},
+};
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+let ws=null, wsRetry=null;
+function connect() {
+  if (ws && ws.readyState<2) return;
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => { clearTimeout(wsRetry); setConn(true,'CONNECTED'); setWsStatus('Connected', true); };
+  ws.onmessage = e => handle(JSON.parse(e.data));
+  ws.onclose = ws.onerror = () => {
+    setConn(false,'OFFLINE'); setWsStatus('Reconnecting…', false);
+    ws=null; wsRetry=setTimeout(connect,3000);
+  };
+}
+function send(o) { if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
+
+function handle(d) {
+  switch(d.type) {
+    case 'init':
+      S.pots      = d.pots       || S.pots;
+      S.potConfig = d.pot_config  || {};
+      S.potDisp   = d.pot_display || Array(8).fill('');
+      S.apps      = d.apps        || [];
+      S.media     = {...S.media,...(d.media||{})};
+      S.fft       = d.fft         || S.fft;
+      S.peaks     = d.peaks       || S.peaks;
+      S.pcConn    = !!d.pc_connected;
+      S.cfg       = d.cfg         || S.cfg;
+      renderFaders(); updateMedia();
+      setConn(true, S.pcConn ? 'PC ONLINE' : 'PC OFFLINE');
+      setPcStatus(S.pcConn);
+      break;
+    case 'pot':
+      S.pots[d.ch]=d.value;
+      if(d.display) S.potDisp[d.ch]=d.display;
+      updateFader(d.ch); break;
+    case 'vol_sync':
+      (d.changes||[]).forEach(c=>{S.pots[c.ch]=c.value;updateFader(c.ch);}); break;
+    case 'pot_config':
+      S.potConfig=d.pots||S.potConfig; renderFaders(); break;
+    case 'pot_display':
+      S.potDisp=d.data||S.potDisp; renderFaders(); break;
+    case 'apps':
+      S.apps=d.apps||[]; break;
+    case 'media':
+      S.media={...S.media,...d.data}; updateMedia(); break;
+    case 'fft':
+      S.fft=d.fft; S.peaks.l=d.l; S.peaks.r=d.r; break;
+    case 'sysinfo': updateSys(d); break;
+    case 'pc_status':
+      S.pcConn=d.connected;
+      setConn(true,d.connected?'PC ONLINE':'PC OFFLINE');
+      setPcStatus(d.connected); break;
+  }
+}
+
+function setConn(on,label) {
+  el('conn-dot').classList.toggle('live',on);
+  el('conn-text').textContent=label;
+}
+
+function setPcStatus(online) {
+  const e = el('pc-status');
+  e.textContent = online ? 'Online' : 'Offline';
+  e.className = 'conn-item-val ' + (online ? 'online' : 'offline');
+}
+
+function setWsStatus(text, online) {
+  const e = el('ws-status');
+  e.textContent = text;
+  e.className = 'conn-item-val ' + (online ? 'online' : 'offline');
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function tickClock() {
+  const n=new Date(), p=n=>String(n).padStart(2,'0');
+  el('clock').textContent=`${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+  el('hdr-time').textContent=`${p(n.getHours())}:${p(n.getMinutes())}`;
+  const days=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const mon=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  el('clock-date').textContent=`${days[n.getDay()]} ${p(n.getDate())} ${mon[n.getMonth()]} ${n.getFullYear()}`;
+}
+setInterval(tickClock,1000); tickClock();
+
+// ── Sysinfo ───────────────────────────────────────────────────────────────────
+function updateSys(d) {
+  el('cpu-fill').style.width=`${d.cpu}%`; el('cpu-val').textContent=`${d.cpu}%`;
+  el('mem-fill').style.width=`${d.mem_pct}%`; el('mem-val').textContent=`${d.mem_used_mb}MB`;
+  if (d.temp!=null) {
+    el('temp-fill').style.width=`${Math.min(100,Math.max(0,(d.temp-30)/50*100))}%`;
+    el('temp-val').textContent=`${d.temp}°C`;
+  }
+}
+
+// ── Media ─────────────────────────────────────────────────────────────────────
+let _pos=0,_dur=0,_playing=false,_baseTime=0;
+
+function updateMedia() {
+  const m=S.media;
+  _pos=m.position||0; _dur=m.duration||0; _playing=m.playing; _baseTime=Date.now();
+
+  el('track-title').textContent  = m.title||'No media';
+  el('track-artist').textContent = m.artist||'—';
+  el('hdr-title').textContent    = m.title||'—';
+  el('hdr-artist').textContent   = m.artist||'No media';
+  el('source-name').textContent  = m.source ? m.source.split('.')[0].toUpperCase() : '—';
+  el('elapsed').textContent      = m.elapsed_str||'0:00';
+  el('duration').textContent     = m.duration_str||'0:00';
+  el('prog-fill').style.width    = _dur>0 ? `${_pos/_dur*100}%` : '0%';
+
+  const pb=el('play-btn');
+  pb.innerHTML=m.playing?'&#9646;&#9646;':'&#9654;';
+  pb.classList.toggle('playing',m.playing);
+
+  // Disc spin
+  el('disc-svg').classList.toggle('spinning',m.playing);
+
+  // Album art
+  const art=m.album_art||'';
+  const img=el('album-img');
+  if (art && art.length>10) {
+    img.onload = ()=>{ img.classList.add('show'); };
+    img.onerror = ()=>{ img.classList.remove('show'); img.src=''; };
+    if (img.src !== art) img.src = art;
+  } else {
+    img.classList.remove('show');
+    img.src='';
+  }
+}
+
+setInterval(()=>{
+  if (!_playing||_dur<=0) return;
+  const pos=Math.min(_dur,_pos+(Date.now()-_baseTime)/1000);
+  el('prog-fill').style.transition='none';
+  el('prog-fill').style.width=`${pos/_dur*100}%`;
+  const s=Math.floor(pos);
+  el('elapsed').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+},500);
+
+function mediaCmd(cmd) { send({type:'media_cmd',cmd}); }
+
+// ── FFT toggle ────────────────────────────────────────────────────────────────
+let fftPaused=false;
+function toggleFFT() {
+  fftPaused=!fftPaused;
+  el('fft-paused').classList.toggle('show',fftPaused);
+  const b=el('fft-btn');
+  b.classList.toggle('active',fftPaused);
+  b.textContent=fftPaused?'▶':'⏸';
+  b.title=fftPaused?'Resume visualiser':'Pause visualiser';
+}
+
+// ── Swipe sidebar ─────────────────────────────────────────────────────────────
+let sbPanel=0;
+function showPanel(i) {
+  sbPanel=i;
+  document.getElementById('sb-track').style.transform=`translateX(${i===0?'0':'-50%'})`;
+  el('dot-0').classList.toggle('on',i===0);
+  el('dot-1').classList.toggle('on',i===1);
+}
+
+(function initSwipe() {
+  const vp = document.getElementById('sb-vp');
+  let x0=0, y0=0, isHoriz=false, tracking=false;
+
+  function start(x, y) { x0=x; y0=y; isHoriz=false; tracking=true; }
+  function move(x, y) {
+    if (!tracking) return;
+    const dx=Math.abs(x-x0), dy=Math.abs(y-y0);
+    if (!isHoriz && (dx>5||dy>5)) isHoriz = dx >= dy;
+  }
+  function end(x) {
+    if (!tracking) return;
+    tracking = false;
+    if (!isHoriz) return;
+    const dx = x - x0;
+    if (Math.abs(dx) > 25) showPanel(dx < 0 ? 1 : 0);
+  }
+
+  // Touch
+  vp.addEventListener('touchstart', e=>start(e.touches[0].clientX, e.touches[0].clientY), {passive:true});
+  vp.addEventListener('touchmove',  e=>move(e.touches[0].clientX, e.touches[0].clientY),  {passive:true});
+  vp.addEventListener('touchend',   e=>end(e.changedTouches[0].clientX),                   {passive:true});
+
+  // Mouse (for desktop testing)
+  vp.addEventListener('mousedown', e=>{ start(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', e=>{ if(tracking) move(e.clientX, e.clientY); });
+  window.addEventListener('mouseup',   e=>{ if(tracking) end(e.clientX); });
+})();
+
+// ── Faders ────────────────────────────────────────────────────────────────────
+function renderFaders() {
+  const row=el('fader'); row.innerHTML='';
+  for(let i=0;i<8;i++) {
+    const appId=S.potConfig[i]||'';
+    const isAuto = appId==='__auto__';
+    const disp = isAuto ? (S.potDisp[i]||'Auto') : friendly(appId);
+    const label=disp||`CH${i+1}`;
+    const pct=S.pots[i]||0;
+    const on=!!appId;
+    const ch=document.createElement('div');
+    ch.className=`fader-ch${on?' assigned':''}`;
+    ch.onclick=()=>openAssign(i);
+    ch.innerHTML=`
+      <div class="fader-label">${label.length>6?label.slice(0,6)+'…':label}</div>
+      <div class="fader-track">
+        <div class="fader-fill ${on?'on':'off'}" id="ff-${i}" style="height:${pct}%"></div>
+        <div class="fader-knob${on?' assigned':''}" id="fk-${i}" style="bottom:calc(${pct}% - 3px)"></div>
+      </div>
+      <div class="fader-value" id="fv-${i}">${pct}%</div>
+      <div class="ch-num">${i+1}</div>`;
+    row.appendChild(ch);
+    if(i<7){const s=document.createElement('div');s.className='fader-sep';row.appendChild(s);}
+  }
+}
+function updateFader(i) {
+  const pct=S.pots[i]||0;
+  const ff=el(`ff-${i}`),fk=el(`fk-${i}`),fv=el(`fv-${i}`);
+  if(ff)ff.style.height=`${pct}%`;
+  if(fk)fk.style.bottom=`calc(${pct}% - 3px)`;
+  if(fv)fv.textContent=`${pct}%`;
+}
+
+// ── Assign ────────────────────────────────────────────────────────────────────
+let assignCh=null;
+function openAssign(ch) {
+  assignCh=ch;
+  const cur=S.potConfig[ch]||'';
+  el('assign-sub').textContent=`CHANNEL ${ch+1}  ·  ${friendly(cur)||'UNASSIGNED'}`;
+  const list=el('app-list'); list.innerHTML='';
+  [
+    {id:'',cls:'s-clear',label:'Unassign'},
+    {id:'__master__',cls:'s-master',label:'Master Volume'},
+    {id:'__auto__',cls:'s-auto',label:'Auto (active app)'},
+  ].forEach(s=>{
+    const it=document.createElement('div');
+    it.className=`app-item ${s.cls}${cur===s.id?' active':''}`;
+    it.innerHTML=`<div class="app-dot"></div>${s.label}`;
+    it.onclick=()=>assignPot(ch,s.id); list.appendChild(it);
+  });
+  send({type:'get_apps'});
+  (S.apps||[]).forEach(app=>{
+    const it=document.createElement('div');
+    it.className=`app-item${cur===app.id?' active':''}`;
+    it.innerHTML=`<div class="app-dot"></div>${app.name}`;
+    it.onclick=()=>assignPot(ch,app.id); list.appendChild(it);
+  });
+  el('assign-overlay').classList.add('open');
+}
+function assignPot(ch,appId) {
+  S.potConfig[ch]=appId; send({type:'set_pot',ch,app:appId});
+  closeAssign(); renderFaders();
+}
+function closeAssign() { el('assign-overlay').classList.remove('open'); }
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function openSettings()  { el('pc-ip-input').value=S.cfg.pc_ip||''; el('settings-overlay').classList.add('open'); }
+function closeSettings() { el('settings-overlay').classList.remove('open'); }
+function saveSettings()  { const ip=el('pc-ip-input').value.trim(); S.cfg.pc_ip=ip; send({type:'set_pc_ip',ip}); closeSettings(); }
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+
+// ── FFT Canvas ────────────────────────────────────────────────────────────────
+const canvas=el('fft-canvas'), ctx=canvas.getContext('2d');
+let pVis=Array(64).fill(0), pVel=Array(64).fill(0), pHold=Array(64).fill(0);
+const HOLD=25;
+
+function resizeCanvas() { const w=canvas.parentElement; canvas.width=w.offsetWidth; canvas.height=w.offsetHeight; }
+window.addEventListener('resize',resizeCanvas); resizeCanvas();
+
+function drawFFT() {
+  if(fftPaused)return;
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='rgba(30,37,53,.7)'; ctx.lineWidth=1;
+  [.25,.5,.75].forEach(f=>{ctx.beginPath();ctx.moveTo(0,H*(1-f));ctx.lineTo(W,H*(1-f));ctx.stroke();});
+  const bins=S.fft,n=bins.length,bw=W/n,gap=Math.max(1,bw*.15);
+  for(let i=0;i<n;i++){
+    const v=bins[i],barH=Math.max(2,v*H),x=i*bw,y=H-barH;
+    const hue=185-v*160,sat=75+v*25,lit=42+v*22;
+    const g=ctx.createLinearGradient(0,y,0,H);
+    g.addColorStop(0,`hsla(${hue},${sat}%,${lit}%,.9)`);
+    g.addColorStop(1,`hsla(${hue},${sat}%,${Math.floor(lit*.35)}%,.25)`);
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.roundRect(x+gap/2,y,bw-gap,barH,2); ctx.fill();
+    if(v>=pVis[i]){pVis[i]=v;pHold[i]=HOLD;pVel[i]=0;}
+    else if(pHold[i]>0){pHold[i]--;}
+    else{pVel[i]+=.002;pVis[i]=Math.max(0,pVis[i]-pVel[i]);}
+    const py=H-pVis[i]*H;
+    ctx.fillStyle=`hsla(${hue},100%,75%,.75)`;
+    ctx.fillRect(x+gap/2,py-1,bw-gap,2);
+  }
+  el('vu-l').style.transform=`scaleX(${Math.min(1,S.peaks.l*2)})`;
+  el('vu-r').style.transform=`scaleX(${Math.min(1,S.peaks.r*2)})`;
+}
+
+function frame(){drawFFT();requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+
+// Boot
+renderFaders();
+connect();
+</script>
+</body>
+</html>
