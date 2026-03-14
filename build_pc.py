@@ -78,6 +78,8 @@ def build():
         '--hidden-import=comtypes', '--hidden-import=comtypes.client',
         '--hidden-import=winsdk', '--hidden-import=websockets',
         '--hidden-import=numpy',
+        '--hidden-import=tkinter', '--hidden-import=tkinter.simpledialog',
+        '--collect-all=tkinter',
     ]
     if has_ico:
         cmd += ['--icon', str(ico)]

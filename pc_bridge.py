@@ -35,18 +35,70 @@ SETTINGS   = CONFIG_DIR / 'settings.json'
 CONFIG_DIR.mkdir(exist_ok=True)
 
 # ── Config ────────────────────────────────────────────────────────────────────
+_DEFAULT_BLOCKLIST = [
+    'python', 'python3', 'pythonw', 'rpiconsole',
+    'system', 'audiodg', 'svchost',
+    'runtimebroker', 'shellexperiencehost',
+    'searchui', 'cortana', 'explorer',
+    'wmplayer', '',
+]
+
+_DEFAULT_KNOWN = {
+    'chrome':            'Chrome',
+    'msedge':            'Edge',
+    'firefox':           'Firefox',
+    'brave':             'Brave',
+    'opera':             'Opera',
+    'vivaldi':           'Vivaldi',
+    'spotify':           'Spotify',
+    'discord':           'Discord',
+    'vlc':               'VLC',
+    'itunes':            'iTunes',
+    'foobar2000':        'foobar2000',
+    'aimp':              'AIMP',
+    'mpc-hc64':          'MPC-HC',
+    'mpc-hc':            'MPC-HC',
+    'mpc-be64':          'MPC-BE',
+    'mpc-be':            'MPC-BE',
+    'potplayer64':       'PotPlayer',
+    'potplayer':         'PotPlayer',
+    'steam':             'Steam',
+    'epicgameslauncher': 'Epic Games',
+    'teams':             'Teams',
+    'slack':             'Slack',
+    'zoom':              'Zoom',
+    'obs64':             'OBS',
+    'obs32':             'OBS',
+}
+
 def load_settings() -> dict:
     try:
         if SETTINGS.exists():
-            return json.loads(SETTINGS.read_text())
+            d = json.loads(SETTINGS.read_text())
+            # Merge defaults for any missing keys
+            if 'blocklist' not in d:
+                d['blocklist'] = list(_DEFAULT_BLOCKLIST)
+            if 'known' not in d:
+                d['known'] = dict(_DEFAULT_KNOWN)
+            return d
     except Exception:
         pass
-    return {'rpi_ip': ''}
+    return {'rpi_ip': '', 'blocklist': list(_DEFAULT_BLOCKLIST), 'known': dict(_DEFAULT_KNOWN)}
 
 def save_settings(d: dict):
     SETTINGS.write_text(json.dumps(d, indent=2))
 
 settings = load_settings()
+
+# Live references — updated whenever settings change so existing threads pick up changes
+_app_blocklist: set = set(settings.get('blocklist', _DEFAULT_BLOCKLIST))
+_known_names:   dict = dict(settings.get('known',     _DEFAULT_KNOWN))
+
+def _reload_lists():
+    """Refresh the live blocklist and known-names from current settings."""
+    global _app_blocklist, _known_names
+    _app_blocklist = set(e.lower() for e in settings.get('blocklist', _DEFAULT_BLOCKLIST))
+    _known_names   = dict(settings.get('known', _DEFAULT_KNOWN))
 
 # ── COM Thread — serialises all pycaw calls ───────────────────────────────────
 # All pycaw objects MUST be created and released on the same COM apartment.
@@ -141,36 +193,9 @@ _auto_last_active: str = ''
 _auto_last_time: float = 0.0
 
 def _friendly_name(raw: str) -> str:
-    """Convert a process name like 'msedge' → 'Edge', 'chrome' → 'Chrome', etc."""
-    _KNOWN = {
-        'chrome':        'Chrome',
-        'msedge':        'Edge',
-        'firefox':       'Firefox',
-        'brave':         'Brave',
-        'opera':         'Opera',
-        'vivaldi':       'Vivaldi',
-        'spotify':       'Spotify',
-        'discord':       'Discord',
-        'vlc':           'VLC',
-        'wmplayer':      'Windows Media Player',
-        'itunes':        'iTunes',
-        'foobar2000':    'foobar2000',
-        'aimp':          'AIMP',
-        'mpc-hc64':      'MPC-HC',
-        'mpc-hc':        'MPC-HC',
-        'mpc-be64':      'MPC-BE',
-        'mpc-be':        'MPC-BE',
-        'potplayer64':   'PotPlayer',
-        'potplayer':     'PotPlayer',
-        'steam':         'Steam',
-        'epicgameslauncher': 'Epic Games',
-        'teams':         'Teams',
-        'slack':         'Slack',
-        'zoom':          'Zoom',
-        'obs64':         'OBS',
-        'obs32':         'OBS',
-    }
-    return _KNOWN.get(raw.lower(), raw.title())
+    """Convert a process name to a human-friendly display name.
+    Uses the user-editable known-names list from settings; falls back to title-case."""
+    return _known_names.get(raw.lower(), raw.title())
 
 
 def _rebuild_sessions():
@@ -212,20 +237,11 @@ def _rebuild_sessions():
     except Exception:
         pass   # silently skip — next 2s tick will retry
 
-# Apps to hide from the assign list and auto-detection
-# These are infrastructure/system processes that produce audio but aren't user-facing
-_APP_BLOCKLIST = {
-    'python', 'python3', 'pythonw',        # our own bridge process
-    'system', 'audiodg', 'svchost',        # Windows audio infra
-    'runtimebroker', 'shellexperiencehost', # Windows shell
-    'searchui', 'cortana', 'explorer',     # Windows UI
-    'wmplayer',                             # if showing as system
-    '',                                     # unnamed sessions
-}
-
+# Apps to hide from the assign list and auto-detection.
+# Managed via settings.json — use tray menu to edit without restarting.
 def _is_media_app(name: str) -> bool:
     """Return True if this session should be shown/used (not infrastructure)."""
-    return name.lower() not in _APP_BLOCKLIST
+    return name.lower() not in _app_blocklist
 
 def _sessions_refresh_loop():
     """Runs in its own thread — rebuilds session list every 2 seconds."""
@@ -973,6 +989,136 @@ def _make_icon():
     except Exception:
         return None
 
+def _tk_input(prompt: str, title: str, default: str = '') -> str:
+    """Single-line Tkinter input dialog. Returns '' if cancelled."""
+    import tkinter as tk
+    from tkinter import simpledialog
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    result = simpledialog.askstring(title, prompt, initialvalue=default, parent=root)
+    root.destroy()
+    return result or ''
+
+
+def _tk_multiline_dialog(title: str, label: str, initial: str) -> str | None:
+    """Scrollable multi-line text editor dialog.
+    Returns the edited text, or None if cancelled."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    result_holder = [None]
+
+    root = tk.Tk()
+    root.title(title)
+    root.resizable(True, True)
+    root.attributes('-topmost', True)
+    root.minsize(520, 380)
+
+    # Darken to match the app aesthetic
+    BG, FG, ACCENT = '#111520', '#c8d8f0', '#00e5ff'
+    root.configure(bg=BG)
+
+    tk.Label(root, text=label, bg=BG, fg=FG, wraplength=500,
+             justify='left', font=('Segoe UI', 9)).pack(padx=14, pady=(12, 6), anchor='w')
+
+    frame = tk.Frame(root, bg=BG)
+    frame.pack(fill='both', expand=True, padx=14, pady=(0, 6))
+
+    scrollbar = tk.Scrollbar(frame)
+    scrollbar.pack(side='right', fill='y')
+
+    text = tk.Text(frame, height=18, width=60, bg='#0a0c10', fg=FG,
+                   insertbackground=ACCENT, selectbackground='#1e2535',
+                   relief='flat', font=('Consolas', 10),
+                   yscrollcommand=scrollbar.set)
+    text.pack(side='left', fill='both', expand=True)
+    scrollbar.config(command=text.yview)
+    text.insert('1.0', initial)
+
+    btn_frame = tk.Frame(root, bg=BG)
+    btn_frame.pack(fill='x', padx=14, pady=(0, 12))
+
+    def on_save():
+        result_holder[0] = text.get('1.0', 'end-1c')
+        root.destroy()
+
+    def on_cancel():
+        root.destroy()
+
+    tk.Button(btn_frame, text='Save', command=on_save, bg=ACCENT, fg='#0a0c10',
+              font=('Segoe UI', 9, 'bold'), relief='flat', padx=16).pack(side='right', padx=(4, 0))
+    tk.Button(btn_frame, text='Cancel', command=on_cancel, bg='#1e2535', fg=FG,
+              font=('Segoe UI', 9), relief='flat', padx=16).pack(side='right')
+
+    root.mainloop()
+    return result_holder[0]
+
+
+def _edit_blocklist_dialog():
+    """Scrollable editor for the blocklist.
+    Shows detected session names at the top, one blocked name per line in the text box.
+    """
+    with _session_lock:
+        all_detected = sorted(k for k in _sessions.keys() if k)
+
+    current_blocked = sorted(_app_blocklist - {''})
+    initial = '\n'.join(current_blocked)
+
+    detected_str = '  '.join(all_detected) if all_detected else '(none detected yet)'
+    label = f'Detected sessions: {detected_str}\n\nOne process name per line to block. Case-insensitive.'
+
+    raw = _tk_multiline_dialog('Edit Blocklist', label, initial)
+    if raw is None:
+        return  # cancelled
+
+    new_entries = [e.strip().lower() for e in raw.splitlines()]
+    new_entries = [e for e in new_entries if e]
+    new_entries.append('')  # always block unnamed sessions
+
+    settings['blocklist'] = new_entries
+    save_settings(settings)
+    _reload_lists()
+    print(f'[Settings] Blocklist updated: {new_entries}')
+
+
+def _edit_known_names_dialog():
+    """Scrollable editor for the process → display name map.
+    One entry per line in the format:  processname=Display Name
+    """
+    current = dict(_known_names)
+
+    with _session_lock:
+        all_detected = sorted(_sessions.keys())
+    unmapped = [n for n in all_detected if n and n not in current and _is_media_app(n)]
+
+    current_str = '\n'.join(f'{k}={v}' for k, v in sorted(current.items()))
+    unmapped_str = '  '.join(unmapped) if unmapped else 'none'
+    label = (f'Unmapped detected apps: {unmapped_str}\n\n'
+             f'Format: processname=Display Name   (one per line)')
+
+    raw = _tk_multiline_dialog('Edit App Names', label, current_str)
+    if raw is None:
+        return  # cancelled
+
+    new_known: dict = {}
+    for line in raw.splitlines():
+        line = line.strip()
+        if '=' in line:
+            k, _, v = line.partition('=')
+            k, v = k.strip().lower(), v.strip()
+            if k and v:
+                new_known[k] = v
+
+    settings['known'] = new_known
+    save_settings(settings)
+    _reload_lists()
+    with _session_lock:
+        for name in _sessions:
+            _session_display[name] = _friendly_name(name)
+    print(f'[Settings] Known names updated: {new_known}')
+
+
 def _tray_main(loop=None):
     try:
         import pystray
@@ -986,25 +1132,18 @@ def _tray_main(loop=None):
         return
 
     def set_ip(icon, item):
-        # Win32 input dialog via VBScript
-        try:
-            import subprocess
-            vbs = ('Dim ip\n'
-                   'ip = InputBox("Enter RPi IP address:", "RPi Audio Console", '
-                   f'"{settings.get("rpi_ip","")}")\n'
-                   'If ip <> "" Then WScript.Echo ip\n')
-            tmp = Path(os.environ.get('TEMP', '.')) / '_rpi_ip_input.vbs'
-            tmp.write_text(vbs)
-            result = subprocess.run(['cscript', '//nologo', str(tmp)],
-                                     capture_output=True, text=True)
-            ip = result.stdout.strip()
-            tmp.unlink(missing_ok=True)
-            if ip:
-                settings['rpi_ip'] = ip
-                save_settings(settings)
-                print(f'[Tray] RPi IP set to {ip}')
-        except Exception as e:
-            print(f'[Tray] set_ip error: {e}')
+        ip = _tk_input('Enter RPi IP address:', 'RPi Audio Console',
+                       settings.get('rpi_ip', ''))
+        if ip:
+            settings['rpi_ip'] = ip
+            save_settings(settings)
+            print(f'[Tray] RPi IP set to {ip}')
+
+    def edit_blocklist(icon, item):
+        threading.Thread(target=_edit_blocklist_dialog, daemon=True).start()
+
+    def edit_known_names(icon, item):
+        threading.Thread(target=_edit_known_names_dialog, daemon=True).start()
 
     def quit_app(icon, item):
         icon.stop()
@@ -1013,8 +1152,10 @@ def _tray_main(loop=None):
     tray = pystray.Icon(
         'rpi_console', icon_img, 'RPi Audio Console',
         menu=pystray.Menu(
-            pystray.MenuItem('Set Pi IP', set_ip),
-            pystray.MenuItem('Exit',      quit_app),
+            pystray.MenuItem('Set Pi IP',       set_ip),
+            pystray.MenuItem('Edit Blocklist',  edit_blocklist),
+            pystray.MenuItem('Edit App Names',  edit_known_names),
+            pystray.MenuItem('Exit',            quit_app),
         )
     )
     tray.run()

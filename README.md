@@ -1,7 +1,15 @@
-# RPi Audio Console v4.2
+# RPi Audio Console v4.3
 
-A clean rebuild of the hardware mixer console. Physical pots on an RPi 4 control 
-Windows application volumes, with media info and audio visualisation on a touchscreen.
+This project is a DIY RPI project that allows you to individually control your Windows application’s volume levels.
+Main features: 
+- RPI hosted Web UI
+- uses >60mb of memory and > 0.2Mbps of network (Max peak during testing was 0.9Mbps for >1sec) 
+- Media controller 
+- Audio spectrum visualiser
+- Physical Potentiometer control
+- Automatic or Manual application to controller assignment
+
+also see [rpi-volume-mixer](https://makerworld.com/en/models/2481269-rpi-volume-mixer#profileId-2725270) for an example system.
 
 ## Architecture
 
@@ -70,6 +78,8 @@ pip install pyinstaller
 python build_pc.py
 # -> dist/RPiConsole.exe
 ```
+
+feel free to build your own .exe or use the prebuilt .exe in the /dist directory
 
 Auto-start: Win+R -> shell:startup -> drop shortcut to RPiConsole.exe
 
@@ -144,6 +154,10 @@ Rules:
   rebuilt within ~2 seconds without needing to reconnect.
 - Assignments are stable and do not change based on which app is loudest or
   currently focused.
+- Apps contained in the blocklist are not shown
+- Apps names are reset via the apps name list
+
+* Access the blocklist and name list via right clicking on the pc taskbar widget 
 
 If you want a specific app on a specific pot, pin it manually using the app name
 assignment instead of Auto. Use Auto for the remainder to catch whatever else is running.
@@ -171,6 +185,7 @@ sudo raspi-config  # Interface Options -> SPI -> Enable
 ```
 
 **PC won't connect:**
+- Check if the pc_bridge.py is running via task amanger either in a 'python' task if not using the .exe or RPiConslole.exe if you're using the .exe
 - Check PC firewall allows ports 5009 and 5010 (TCP inbound) — see PC Setup above
 - Verify IP in UI settings matches PC's local IP
 - PC bridge log: run python pc_bridge.py in terminal — should show both
@@ -188,6 +203,9 @@ sudo raspi-config  # Interface Options -> SPI -> Enable
 - Must have a WASAPI loopback device (standard on Windows 10+)
 - Check RPi log for [FFT] Connected — if it shows Connection failed, port 5010
   is blocked by the firewall
+
+**FFT visualiser to noisy or small**  
+- locate the line 'REF_LEVEL'~line 556, in the pc_bridge.py file and modify its value to your liking
 
 **No media info:**
 - Install pip install winrt-Windows.Media.Control (or winsdk)
