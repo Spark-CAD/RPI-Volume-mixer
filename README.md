@@ -1,4 +1,4 @@
-# RPi Audio Console v4.3
+# RPI Volume Mixer v4.4
 
 This project is a DIY RPI project that allows you to individually control your Windows application’s volume levels.
 Main features: 

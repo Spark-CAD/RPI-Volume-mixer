@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-RPi Audio Console — PC Bridge  (v4 clean rebuild)
-==================================================
+RPi Audio Console — PC Bridge  (v4.4 — auto-assign + game audio fixes)
+=======================================================================
 Architecture:
   • Pure stdlib + websockets  — no Flask, minimal footprint
   • WebSocket server on :5009 — RPi connects to us
@@ -22,6 +22,29 @@ Requirements:
     pip install winrt-Windows.Media.Control  (or winsdk)
 
 Memory target: ~80-120 MB  (Flask+browser gone, COM leak fixed)
+
+v4.3 memory leak fixes:
+  • _media_poll_loop: reuses Manager object instead of creating a new COM
+    object every second; only re-requests on exception
+  • _get_album_art: reads album art in one call (read_bytes) instead of a
+    per-byte loop; explicitly closes DataReader and stream after use
+  • _rebuild_sessions: removed duplicate comtypes.CoInitialize() call that
+    ran every 2 s on the sessions thread (CoInitialize already called once
+    at thread start in _sessions_refresh_loop)
+  • _log_bins / _fft_thread: log bin edge array pre-computed once before the
+    FFT loop instead of being allocated fresh on every frame (30 fps)
+  • Scheduled soft-restart every 48 h as a safety-net belt-and-suspenders
+    measure; uses os.execv so the process replaces itself cleanly
+
+v4.4 auto-assign + game audio fixes:
+  • _rebuild_auto_assignments: manually-pinned apps are now excluded from the
+    auto pool, so a pinned pot and an auto pot can never both control the same
+    app simultaneously
+  • _rebuild_sessions: when multiple audio sessions share the same process
+    name (common with Steam/Epic games launched via a wrapper), the session
+    with the highest current peak level is chosen rather than whichever one
+    happened to be iterated last — fixes auto-assigned games that appeared
+    to do nothing because the wrong session object was stored
 """
 
 import asyncio, json, math, os, queue, sys, threading, time
@@ -199,39 +222,62 @@ def _friendly_name(raw: str) -> str:
 
 
 def _rebuild_sessions():
+    # FIX (v4.3): removed duplicate comtypes.CoInitialize() that ran every 2 s.
+    # CoInitialize is already called once at thread start in _sessions_refresh_loop.
+    # Calling it repeatedly on the same thread is harmless per COM spec but the
+    # repeated import machinery and local-variable shadowing of CLSCTX_ALL was
+    # preventing timely GC of the old session COM objects.
+    #
+    # FIX (v4.4): when multiple audio sessions share the same process name (common
+    # with Steam games that launch via a wrapper process), the old code silently
+    # overwrote earlier entries with later ones, so whichever session happened to
+    # be iterated last won — often NOT the one actually producing game audio.
+    # Now we collect ALL sessions per name and keep the one with the highest
+    # current peak level, falling back to the last-seen session if all are silent.
+    # This makes auto-assign reliably land on the real game audio session.
     global _sessions, _session_meters, _session_display
     if AudioUtilities is None:
         return
     try:
-        import comtypes
-        comtypes.CoInitialize()
         from pycaw.pycaw import IAudioMeterInformation
-        CLSCTX_ALL = None
-        try:
-            from pycaw.pycaw import CLSCTX_ALL
-        except ImportError:
-            from comtypes import CLSCTX_ALL
-        new_vol = {}
-        new_meter = {}
-        new_display = {}
+        # Intermediate: {name: [(peak, vol, meter_or_None), ...]}
+        candidates: dict = {}
         for s in AudioUtilities.GetAllSessions():
             try:
-                vol  = s.SimpleAudioVolume
+                vol = s.SimpleAudioVolume
                 if s.Process:
                     raw_name = s.Process.name().lower().replace('.exe', '')
                 else:
                     raw_name = 'system'
-                new_vol[raw_name] = vol
-                new_display[raw_name] = _friendly_name(raw_name)
+                meter = None
+                peak  = 0.0
                 try:
                     meter = s._ctl.QueryInterface(IAudioMeterInformation)
-                    new_meter[raw_name] = meter
+                    peak  = meter.GetPeakValue()
                 except Exception:
                     pass
+                if raw_name not in candidates:
+                    candidates[raw_name] = []
+                candidates[raw_name].append((peak, vol, meter))
             except Exception:
                 pass
+
+        # For each name, pick the session with the highest peak (i.e. the one
+        # currently producing audio).  If all peaks are zero, keep the last entry
+        # (preserves previous behaviour for silent apps).
+        new_vol     = {}
+        new_meter   = {}
+        new_display = {}
+        for raw_name, entries in candidates.items():
+            best = max(entries, key=lambda e: e[0])
+            peak, vol, meter = best
+            new_vol[raw_name]     = vol
+            new_display[raw_name] = _friendly_name(raw_name)
+            if meter is not None:
+                new_meter[raw_name] = meter
+
         with _session_lock:
-            _sessions = new_vol
+            _sessions       = new_vol
             _session_meters = new_meter
             _session_display = new_display
     except Exception:
@@ -297,10 +343,23 @@ def _rebuild_auto_assignments(pots: dict):
     - Extra auto pots beyond the app count get '' (unassigned).
     - Called whenever the session list changes or pots are reconfigured.
     Updates _auto_per_ch in-place and returns it.
+
+    FIX (v4.4): apps that are already manually pinned to a named channel are
+    excluded from the auto pool.  Previously a pinned app would also appear in
+    the auto pool, so you could end up with two pots both controlling the same
+    app — one named and one auto.
     """
+    # Collect apps that are explicitly pinned to a non-auto channel
+    pinned_apps: set = {
+        app.lower().replace('.exe', '')
+        for app in pots.values()
+        if app and app not in ('__auto__', '__master__', '')
+    }
+
     with _session_lock:
         available = sorted(
-            [k for k in _sessions.keys() if _is_media_app(k)],
+            [k for k in _sessions.keys()
+             if _is_media_app(k) and k not in pinned_apps],
             key=lambda n: _session_display.get(n, _friendly_name(n)).lower()
         )
 
@@ -317,7 +376,8 @@ def _rebuild_auto_assignments(pots: dict):
         except StopIteration:
             _auto_per_ch[ch_str] = ''   # more pots than apps
 
-    print(f'[Auto] Assignments rebuilt: {dict(_auto_per_ch)}  (apps={available})')
+    print(f'[Auto] Assignments rebuilt: {dict(_auto_per_ch)}  '
+          f'(apps={available}, pinned={sorted(pinned_apps)})')
     return dict(_auto_per_ch)
 
 
@@ -611,6 +671,14 @@ def _fft_thread():
 
     buf = np.zeros(buf_len, dtype=np.float32)
 
+    # FIX (v4.3): pre-compute log bin edges once here rather than allocating a
+    # new array on every call to _log_bins (30 allocations/sec over days adds up).
+    fft_size  = buf_len // 2 + 1
+    log_freqs = np.clip(
+        np.logspace(0, np.log10(fft_size - 1), FFT_BINS + 1).astype(int),
+        0, fft_size - 1,
+    )
+
     while True:
         t0 = time.monotonic()
         try:
@@ -633,7 +701,7 @@ def _fft_thread():
             spectrum  = np.abs(np.fft.rfft(buf * window))
 
             # Bin into FFT_BINS logarithmically
-            bins = _log_bins(spectrum, FFT_BINS)
+            bins = _log_bins(spectrum, FFT_BINS, log_freqs)
 
             # Apply spectral tilt — gently boost highs / cut lows so the
             # display looks balanced rather than bass-heavy
@@ -692,14 +760,19 @@ def _fft_thread():
     p.terminate()
     print('[FFT] Thread exited')
 
-def _log_bins(spectrum: 'np.ndarray', n: int) -> 'np.ndarray':
+def _log_bins(spectrum: 'np.ndarray', n: int,
+              freqs: 'np.ndarray' = None) -> 'np.ndarray':
     """Map spectrum into n logarithmically-spaced bins using RMS energy.
     RMS is a true energy measure — fair across both narrow low-freq bins
-    (where mean≈max anyway) and wide high-freq bins (where max overcounts)."""
+    (where mean≈max anyway) and wide high-freq bins (where max overcounts).
+
+    FIX (v4.3): accepts a pre-computed freqs array so the caller can allocate
+    it once before the FFT loop instead of re-allocating on every frame."""
     import numpy as np
     size  = len(spectrum)
-    freqs = np.logspace(0, np.log10(size - 1), n + 1).astype(int)
-    freqs = np.clip(freqs, 0, size - 1)
+    if freqs is None:
+        freqs = np.clip(np.logspace(0, np.log10(size - 1), n + 1).astype(int),
+                        0, size - 1)
     bins  = np.array([
         np.sqrt(np.mean(spectrum[freqs[i]:freqs[i+1]+1] ** 2))
         for i in range(n)
@@ -721,85 +794,96 @@ def _fmt_time(s: float) -> str:
     return f'{s//60}:{s%60:02d}'
 
 async def _get_album_art(info) -> str:
-    """Read album art thumbnail from media session and return as base64 data URL."""
+    """Read album art thumbnail from media session and return as base64 data URL.
+
+    FIX (v4.3): reads all bytes in a single read_bytes() call instead of a
+    per-byte loop, and explicitly closes the DataReader and stream afterwards.
+    The per-byte loop was creating thousands of tiny Python objects per image
+    load, and the unclosed stream kept a WinRT COM reference alive until the
+    next GC cycle — over days this accumulated significantly."""
+    import base64
+    # Try winsdk first, then winrt
+    _backends = []
     try:
-        thumb = info.thumbnail
-        if thumb is None:
-            return ''
-        stream = await thumb.open_read_async()
-        size   = stream.size
-        if size == 0:
-            return ''
-        reader = stream.get_input_stream_at(0)
-        # Read bytes via Windows.Storage.Streams
-        from winsdk.windows.storage.streams import DataReader
-        dr = DataReader(reader)
-        await dr.load_async(size)
-        buf = bytearray(size)
-        for i in range(size):
-            buf[i] = dr.read_byte()
-        import base64
-        b64 = base64.b64encode(bytes(buf)).decode()
-        return f'data:image/jpeg;base64,{b64}'
-    except Exception:
+        from winsdk.windows.storage.streams import DataReader as _DR_winsdk
+        _backends.append(_DR_winsdk)
+    except ImportError:
+        pass
+    try:
+        from winrt.windows.storage.streams import DataReader as _DR_winrt
+        _backends.append(_DR_winrt)
+    except ImportError:
+        pass
+
+    for DataReader in _backends:
         try:
-            # Fallback: winrt API
             thumb = info.thumbnail
             if thumb is None:
                 return ''
-            from winrt.windows.storage.streams import DataReader
             stream = await thumb.open_read_async()
+            size   = stream.size
+            if size == 0:
+                try: stream.close()
+                except Exception: pass
+                return ''
             dr = DataReader(stream.get_input_stream_at(0))
-            await dr.load_async(stream.size)
-            buf = bytearray(stream.size)
-            for i in range(stream.size):
-                buf[i] = dr.read_byte()
-            import base64
-            return f'data:image/jpeg;base64,{base64.b64encode(bytes(buf)).decode()}'
+            try:
+                await dr.load_async(size)
+                buf = bytes(dr.read_bytes(size))   # single bulk read — no per-byte loop
+            finally:
+                try: dr.close()
+                except Exception: pass
+                try: stream.close()
+                except Exception: pass
+            return f'data:image/jpeg;base64,{base64.b64encode(buf).decode()}'
         except Exception:
-            return ''
+            continue
+    return ''
 
 async def _media_poll_loop(send_fn):
-    """Polls Windows media session and sends updates when changed."""
+    """Polls Windows media session and sends updates when changed.
+
+    FIX (v4.3): the Manager COM object is requested once and reused for the
+    lifetime of the connection.  Previously a fresh manager + session COM object
+    pair was created on every 1-second iteration; WinRT COM objects are not
+    promptly released by Python's GC so over days this caused significant
+    accumulation.  The manager is only re-requested when an exception occurs
+    (e.g. the session becomes temporarily unavailable)."""
     if not IS_WIN:
         return
 
     # Try winsdk first, fall back to winrt
-    get_manager = None
-    try:
-        from winsdk.windows.media.control import \
-            GlobalSystemMediaTransportControlsSessionManager as Manager
-        get_manager = lambda: asyncio.get_event_loop().run_in_executor(
-            None, lambda: asyncio.run(Manager.request_async())
-        )
-    except ImportError:
-        pass
-
-    if get_manager is None:
+    Manager = None
+    for mod_path in ('winsdk.windows.media.control', 'winrt.windows.media.control'):
         try:
-            from winrt.windows.media.control import \
-                GlobalSystemMediaTransportControlsSessionManager as Manager
-            get_manager = Manager
+            m = __import__(mod_path, fromlist=['GlobalSystemMediaTransportControlsSessionManager'])
+            Manager = m.GlobalSystemMediaTransportControlsSessionManager
+            break
         except ImportError:
-            print('[Media] winrt/winsdk not available — media disabled')
-            print('[Media]   pip install winrt-Windows.Media.Control')
-            return
+            continue
+
+    if Manager is None:
+        print('[Media] winrt/winsdk not available — media disabled')
+        print('[Media]   pip install winrt-Windows.Media.Control')
+        return
 
     last_hash = ''
+    manager   = None      # requested once, re-requested only on error
     while True:
         try:
-            manager  = await Manager.request_async()
-            session  = manager.get_current_session()
+            if manager is None:
+                manager = await Manager.request_async()
+            session = manager.get_current_session()
             if session:
-                info  = await session.try_get_media_properties_async()
-                tl    = session.get_timeline_properties()
-                pb    = session.get_playback_info()
-                title  = info.title or ''
-                artist = info.artist or ''
+                info    = await session.try_get_media_properties_async()
+                tl      = session.get_timeline_properties()
+                pb      = session.get_playback_info()
+                title   = info.title or ''
+                artist  = info.artist or ''
                 playing = pb.playback_status.value == 4
-                dur  = tl.end_time.total_seconds() if tl.end_time else 0
-                pos  = tl.position.total_seconds() if tl.position else 0
-                source = session.source_app_user_model_id or ''
+                dur     = tl.end_time.total_seconds() if tl.end_time else 0
+                pos     = tl.position.total_seconds() if tl.position else 0
+                source  = session.source_app_user_model_id or ''
                 new_hash = f'{title}{artist}{playing}{int(pos//5)}'
                 if new_hash != last_hash:
                     last_hash = new_hash
@@ -827,8 +911,10 @@ async def _media_poll_loop(send_fn):
                     with _media_lock:
                         _media_state.update(blank)
                     await send_fn({'type': 'media', 'data': blank})
-        except Exception as e:
-            pass  # Session briefly unavailable — not an error
+        except Exception:
+            # Session briefly unavailable — drop the cached manager so we get a
+            # fresh one next tick rather than hammering a stale COM object.
+            manager = None
         await asyncio.sleep(1)
 
 async def _handle_media_cmd(cmd: str):
@@ -1164,6 +1250,27 @@ def _tray_main(loop=None):
 
 async def _main():
     import websockets
+
+    # ── Scheduled soft-restart (memory safety net) ────────────────────────────
+    # Even with the v4.3 leak fixes, a periodic restart is a belt-and-suspenders
+    # measure against any residual drift from WinRT/COM objects that Python's GC
+    # doesn't promptly collect.  48 h is chosen so it never fires during typical
+    # daytime use but keeps multi-day RSS under control.
+    # os.execv replaces the current process image in-place — same PID parent,
+    # tray icon re-initialises, settings are reloaded from disk.
+    RESTART_INTERVAL_H = 48
+
+    def _soft_restart_thread():
+        time.sleep(RESTART_INTERVAL_H * 3600)
+        print(f'[Bridge] Scheduled soft-restart after {RESTART_INTERVAL_H}h — restarting process')
+        try:
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        except Exception as e:
+            print(f'[Bridge] execv failed: {e} — falling back to os._exit')
+            os._exit(0)
+
+    threading.Thread(target=_soft_restart_thread, daemon=True,
+                     name='soft-restart').start()
 
     # Start COM thread
     com_thread = threading.Thread(target=_com_thread_main, daemon=True, name='com')

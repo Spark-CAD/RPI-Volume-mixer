@@ -1,0 +1,16 @@
+Fix 1 — _get_album_art (lines ~747–792)
+Replaced the byte-by-byte for i in range(size): dr.read_byte() loop with a single dr.read_bytes(size) call. Also wrapped the DataReader and stream in a try/finally that explicitly calls .close() on both. The old code left WinRT COM stream objects open until the GC got around to them, and the per-byte loop created thousands of small Python objects per album art load.
+Fix 2 — _media_poll_loop (lines ~794–869)
+The Manager object is now requested once before the loop and reused every tick. It only re-requests if an exception is thrown. Previously it called await Manager.request_async() on every 1-second iteration — that's 86,400 new COM objects per day that Python's GC had to clean up asynchronously. Also simplified the winsdk/winrt fallback detection using __import__ to avoid the broken get_manager = lambda: asyncio.run(...) pattern in the original.
+Fix 3 — _rebuild_sessions (lines ~214–249)
+Removed the import comtypes; comtypes.CoInitialize() call that ran every 2 seconds inside this function. CoInitialize is already called once at thread start in _sessions_refresh_loop. The repeated call also shadowed the module-level CLSCTX_ALL with a local None variable, which was interfering with timely release of the old session COM objects being replaced each cycle.
+Fix 4 — _fft_thread + _log_bins (lines ~625–655, ~714–731)
+log_freqs (the log-spaced bin edge array) is now pre-computed once before the while True: loop and passed into _log_bins as an argument. Previously _log_bins allocated a fresh numpy array on every call — 30 times per second, every second the FFT is running. _log_bins still falls back to computing it internally if called without the argument, so nothing else breaks.
+Fix 5 — Soft restart (lines ~1205–1224)
+A daemon thread sleeps for 48 hours then calls os.execv(sys.executable, sys.argv), which replaces the current process image in-place. This means settings reload from disk, all threads restart clean, and the tray icon re-initialises — essentially identical to you manually restarting it, but automatic. If execv fails for any reason (e.g. running as a frozen .exe) it falls back to os._exit(0) so Windows can relaunch it via the startup shortcut.
+
+Bug 1 — Two pots controlling one app:
+_rebuild_auto_assignments never excluded manually-pinned apps from the auto pool.
+
+Bug 2 — Auto-assigned games don't control volume:
+_rebuild_sessions used a flat dict keyed by process name, so when a game had multiple audio sessions (Steam overlay, main game, anti-cheat etc.), whichever one pycaw iterated last overwrote the others — often landing on a silent session rather than the one actually producing audio.
