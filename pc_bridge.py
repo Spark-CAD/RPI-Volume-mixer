@@ -1256,17 +1256,29 @@ async def _main():
     # measure against any residual drift from WinRT/COM objects that Python's GC
     # doesn't promptly collect.  48 h is chosen so it never fires during typical
     # daytime use but keeps multi-day RSS under control.
-    # os.execv replaces the current process image in-place — same PID parent,
-    # tray icon re-initialises, settings are reloaded from disk.
+    #
+    # FIX: os.execv does not work for PyInstaller frozen exes — the process
+    # unpacks to a _MEI temp dir that is deleted before execv can re-execute it.
+    # Instead: frozen exe uses os.startfile (Windows launches a fresh copy then
+    # this one exits); plain Python script still uses os.execv.
     RESTART_INTERVAL_H = 48
 
     def _soft_restart_thread():
         time.sleep(RESTART_INTERVAL_H * 3600)
-        print(f'[Bridge] Scheduled soft-restart after {RESTART_INTERVAL_H}h — restarting process')
+        print(f'[Bridge] Scheduled soft-restart after {RESTART_INTERVAL_H}h')
         try:
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            if getattr(sys, 'frozen', False):
+                # Running as a PyInstaller .exe — launch a new copy then exit
+                import subprocess
+                subprocess.Popen([sys.executable] + sys.argv[1:],
+                                 creationflags=0x00000008)  # DETACHED_PROCESS
+                time.sleep(2)   # give the new process time to start
+                os._exit(0)
+            else:
+                # Running as a plain Python script — replace process in-place
+                os.execv(sys.executable, [sys.executable] + sys.argv)
         except Exception as e:
-            print(f'[Bridge] execv failed: {e} — falling back to os._exit')
+            print(f'[Bridge] Restart failed: {e} — exiting so OS can relaunch')
             os._exit(0)
 
     threading.Thread(target=_soft_restart_thread, daemon=True,
